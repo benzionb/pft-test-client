@@ -20,6 +20,15 @@ function requirePayment(txJson: unknown): Payment {
   return tx as Payment;
 }
 
+function createSigner(nodeUrl?: string) {
+  const seed = process.env.PFT_WALLET_SEED;
+  const mnemonic = process.env.PFT_WALLET_MNEMONIC;
+  if (!seed && !mnemonic) {
+    throw new Error("PFT_WALLET_SEED or PFT_WALLET_MNEMONIC is required for signing.");
+  }
+  return new TransactionSigner({ seed, mnemonic, nodeUrl });
+}
+
 function requireJwt(): string {
   const jwt = resolveJwt();
   if (!jwt) {
@@ -131,11 +140,10 @@ program
   .option("--kind <kind>", "Pointer kind", "TASK_SUBMISSION")
   .option("--schema <schema>", "Pointer schema", "1")
   .option("--flags <flags>", "Pointer flags", "1")
-  .option("--node-url <url>", "XRPL node URL", "https://rpc.testnet.postfiat.org:6008")
+  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
   .action(async (opts) => {
     const api = getApi();
-    const seed = process.env.PFT_WALLET_SEED;
-    if (!seed) throw new Error("PFT_WALLET_SEED is required for signing.");
+    const signer = createSigner(opts.nodeUrl);
 
     const accountSummary = await api.getAccountSummary();
     const pubkey = (accountSummary as { tasknode_encryption_pubkey?: string })?.tasknode_encryption_pubkey;
@@ -179,7 +187,6 @@ program
     const txJson = (pointer as { tx_json?: unknown })?.tx_json;
     if (!txJson) throw new Error("Pointer prepare missing tx_json.");
 
-    const signer = new TransactionSigner(seed, opts.nodeUrl);
     const txHash = await signer.signAndSubmit(requirePayment(txJson));
 
     const submit = await api.submitEvidence(opts.taskId, {
@@ -202,11 +209,10 @@ program
   .option("--kind <kind>", "Pointer kind", "TASK_SUBMISSION")
   .option("--schema <schema>", "Pointer schema", "1")
   .option("--flags <flags>", "Pointer flags", "1")
-  .option("--node-url <url>", "XRPL node URL", "https://rpc.testnet.postfiat.org:6008")
+  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
   .action(async (opts) => {
     const api = getApi();
-    const seed = process.env.PFT_WALLET_SEED;
-    if (!seed) throw new Error("PFT_WALLET_SEED is required for signing.");
+    const signer = createSigner(opts.nodeUrl);
 
     const responseText = requireNonEmpty(opts.response, "response");
     const respond = await api.respondVerification(opts.taskId, opts.type, responseText);
@@ -228,7 +234,6 @@ program
     const txJson = (pointer as { tx_json?: unknown })?.tx_json;
     if (!txJson) throw new Error("Pointer prepare missing tx_json.");
 
-    const signer = new TransactionSigner(seed, opts.nodeUrl);
     const txHash = await signer.signAndSubmit(requirePayment(txJson));
 
     const submit = await api.submitVerification(opts.taskId, {

@@ -2,14 +2,27 @@ import { Client, Wallet, xrpToDrops, Payment } from "xrpl";
 
 export class SigningError extends Error {}
 
+export type SignerOptions = {
+  seed?: string;
+  mnemonic?: string;
+  nodeUrl?: string;
+};
+
 export class TransactionSigner {
   client: Client;
   wallet: Wallet;
 
-  constructor(walletSeed: string, nodeUrl = "https://rpc.testnet.postfiat.org:6008") {
-    if (!walletSeed) throw new SigningError("walletSeed is required");
+  constructor(options: SignerOptions) {
+    const nodeUrl = options.nodeUrl ?? "wss://rpc.testnet.postfiat.org:6008";
     this.client = new Client(nodeUrl);
-    this.wallet = Wallet.fromSeed(walletSeed);
+
+    if (options.mnemonic) {
+      this.wallet = Wallet.fromMnemonic(options.mnemonic);
+    } else if (options.seed) {
+      this.wallet = Wallet.fromSeed(options.seed);
+    } else {
+      throw new SigningError("Either seed or mnemonic is required");
+    }
   }
 
   async connect() {
