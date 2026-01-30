@@ -1,7 +1,7 @@
 {
-  "name": "pft-test-client",
+  "name": "pft-cli-client",
   "version": "0.1.0",
-  "private": true,
+  "description": "Programmatic CLI client for the Post Fiat Task Node - enables automated task discovery, acceptance, evidence submission, and verification handling",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "build:test": "tsc -p tsconfig.test.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "bin": {
     "pft-cli": "dist/cli.js"
@@ -17,6 +18,31 @@
   "engines": {
     "node": ">=18"
   },
+  "keywords": [
+    "post-fiat",
+    "pft",
+    "task-node",
+    "cli",
+    "xrpl",
+    "ipfs",
+    "blockchain",
+    "ai-agents"
+  ],
+  "author": "Post Fiat Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/benzionb/pft-test-client.git"
+  },
+  "homepage": "https://github.com/benzionb/pft-test-client#readme",
+  "bugs": {
+    "url": "https://github.com/benzionb/pft-test-client/issues"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "commander": "^12.1.0",
     "xrpl": "^4.2.0"
