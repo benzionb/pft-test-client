@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import type { Payment } from "xrpl";
-import { resolveBaseUrl, resolveContextText, resolveJwt, setConfigValue } from "./config.js";
+import { resolveBaseUrl, resolveContextText, resolveJwt, resolveTimeoutMs, setConfigValue } from "./config.js";
 import { TaskNodeApi } from "./tasknode_api.js";
 import { TransactionSigner } from "./index.js";
 
@@ -37,17 +37,17 @@ function requirePayment(txJson: unknown): Payment {
 function requireJwt(): string {
   const jwt = resolveJwt();
   if (!jwt) {
-    throw new Error("JWT missing. Set PFT_TASKNODE_JWT or run: pft-cli auth set-token <jwt>");
+    throw new Error("JWT missing. Set PFT_TASKNODE_JWT or run: pft-cli auth:set-token <jwt>");
   }
   return jwt;
 }
 
 function getApi() {
   const jwt = requireJwt();
-  return new TaskNodeApi(jwt, resolveBaseUrl());
+  return new TaskNodeApi(jwt, resolveBaseUrl(), resolveTimeoutMs());
 }
 
-async function printJson(value: JsonValue) {
+function printJson(value: JsonValue) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
@@ -61,7 +61,7 @@ program
   .action(async () => {
     const api = getApi();
     const summary = await api.getAccountSummary();
-    await printJson(summary as JsonValue);
+    printJson(summary as JsonValue);
   });
 
 program
@@ -80,7 +80,7 @@ program
   .action(async () => {
     const api = getApi();
     const summary = await api.getTasksSummary();
-    await printJson(summary as JsonValue);
+    printJson(summary as JsonValue);
   });
 
 program
@@ -95,7 +95,7 @@ program
       throw new Error(`Invalid status: ${status}`);
     }
     const tasks = (summary as { tasks?: Record<string, unknown> })?.tasks?.[status] || [];
-    await printJson({ status, tasks });
+    printJson({ status, tasks });
   });
 
 program
@@ -105,7 +105,7 @@ program
   .action(async (taskId) => {
     const api = getApi();
     const task = await api.getTask(taskId);
-    await printJson(task as JsonValue);
+    printJson(task as JsonValue);
   });
 
 program
@@ -115,7 +115,7 @@ program
   .action(async (taskId) => {
     const api = getApi();
     const result = await api.acceptTask(taskId);
-    await printJson(result as JsonValue);
+    printJson(result as JsonValue);
   });
 
 // Chat
@@ -130,7 +130,7 @@ program
     const content = requireNonEmpty(opts.content, "content");
     const context = requireNonEmpty(contextText, "context");
     const response = await api.sendChat(content, context);
-    await printJson(response as JsonValue);
+    printJson(response as JsonValue);
   });
 
 // Evidence submission flow
@@ -203,7 +203,7 @@ program
       evidence_id: evidenceId,
     });
 
-    await printJson({ upload, pointer, tx_hash: txHash, submit } as JsonValue);
+    printJson({ upload, pointer, tx_hash: txHash, submit } as JsonValue);
   });
 
 // Verification response flow
@@ -252,7 +252,7 @@ program
       evidence_id: evidenceId,
     });
 
-    await printJson({ respond, pointer, tx_hash: txHash, submit } as JsonValue);
+    printJson({ respond, pointer, tx_hash: txHash, submit } as JsonValue);
   });
 
 // Watch task status
@@ -272,7 +272,7 @@ program
         const status = (task as { task?: { status?: string } })?.task?.status;
         process.stdout.write(`[${new Date().toISOString()}] status=${status ?? "unknown"}\n`);
         if (status === "rewarded" || status === "refused" || status === "cancelled") {
-          await printJson(task as JsonValue);
+          printJson(task as JsonValue);
           break;
         }
         errorCount = 0;

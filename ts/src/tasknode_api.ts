@@ -30,9 +30,10 @@ function ensureWebApis() {
 export class TaskNodeApi {
   private jwt: string;
   private baseUrl: string;
+  private timeoutMs: number;
 
-  constructor(jwt: string, baseUrl = "https://tasknode.postfiat.org") {
-    if (!jwt) throw new Error("JWT is required (set PFT_TASKNODE_JWT or use auth set-token).");
+  constructor(jwt: string, baseUrl = "https://tasknode.postfiat.org", timeoutMs = 30000) {
+    if (!jwt) throw new Error("JWT is required (set PFT_TASKNODE_JWT or use auth:set-token).");
     ensureWebApis();
     try {
       this.baseUrl = new URL(baseUrl).toString();
@@ -40,6 +41,7 @@ export class TaskNodeApi {
       throw new Error(`Invalid base URL: ${String(err)}`);
     }
     this.jwt = jwt;
+    this.timeoutMs = timeoutMs;
   }
 
   private async requestJson<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -50,11 +52,19 @@ export class TaskNodeApi {
     };
     if (body !== undefined) headers["Content-Type"] = "application/json";
 
-    const res = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!res.ok) {
       const text = await res.text();
@@ -66,14 +76,22 @@ export class TaskNodeApi {
 
   private async requestForm<T>(path: string, form: FormData): Promise<T> {
     const url = new URL(path, this.baseUrl).toString();
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.jwt}`,
-        Accept: "application/json",
-      },
-      body: form,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.jwt}`,
+          Accept: "application/json",
+        },
+        body: form,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!res.ok) {
       const text = await res.text();

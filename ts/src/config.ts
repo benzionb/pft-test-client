@@ -6,16 +6,41 @@ export type CliConfig = {
   jwt?: string;
   baseUrl?: string;
   contextText?: string;
+  timeoutMs?: number;
 };
 
 const CONFIG_DIR = path.join(os.homedir(), ".pft-tasknode");
 const CONFIG_PATH = path.join(CONFIG_DIR, "config.json");
 
+function normalizeTimeout(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return undefined;
+}
+
+function normalizeConfig(raw: unknown): CliConfig {
+  if (!raw || typeof raw !== "object") return {};
+  const obj = raw as Record<string, unknown>;
+  const config: CliConfig = {};
+  if (typeof obj.jwt === "string" && obj.jwt.trim().length > 0) config.jwt = obj.jwt.trim();
+  if (typeof obj.baseUrl === "string" && obj.baseUrl.trim().length > 0) config.baseUrl = obj.baseUrl.trim();
+  if (typeof obj.contextText === "string" && obj.contextText.trim().length > 0) {
+    config.contextText = obj.contextText;
+  }
+  const timeoutMs = normalizeTimeout(obj.timeoutMs);
+  if (timeoutMs) config.timeoutMs = timeoutMs;
+  return config;
+}
+
 export function loadConfig(): CliConfig {
   try {
     const raw = fs.readFileSync(CONFIG_PATH, "utf8");
-    return JSON.parse(raw) as CliConfig;
-  } catch {
+    return normalizeConfig(JSON.parse(raw));
+  } catch (err) {
+    process.stderr.write(`Warning: unable to load config: ${String(err)}\n`);
     return {};
   }
 }
@@ -46,4 +71,11 @@ export function resolveBaseUrl(): string {
 
 export function resolveContextText(): string | undefined {
   return process.env.PFT_CONTEXT_TEXT || loadConfig().contextText;
+}
+
+export function resolveTimeoutMs(): number {
+  const fromEnv = process.env.PFT_TASKNODE_TIMEOUT_MS;
+  const parsed = normalizeTimeout(fromEnv);
+  if (parsed) return parsed;
+  return loadConfig().timeoutMs || 30000;
 }
