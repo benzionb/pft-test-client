@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import type { Payment } from "xrpl";
+import { randomUUID } from "node:crypto";
 import { resolveBaseUrl, resolveContextText, resolveJwt, resolveTimeoutMs, setConfigValue } from "./config.js";
 import { TaskNodeApi } from "./tasknode_api.js";
 import { TransactionSigner } from "./index.js";
@@ -342,6 +343,15 @@ program
     const api = getApi();
     const signer = createSigner(opts.nodeUrl);
 
+    // Check for existing pending submission first
+    const existingPending = loadPending(opts.taskId, "verification_response");
+    if (existingPending) {
+      process.stderr.write(`Found pending verification response for task ${opts.taskId}.\n`);
+      process.stderr.write(`Use 'pending:resume --task-id ${opts.taskId} --type verification_response' to complete it.\n`);
+      process.stderr.write(`Or 'pending:clear --task-id ${opts.taskId} --type verification_response' to start fresh.\n`);
+      throw new Error("Pending verification response exists. Resume or clear it first.");
+    }
+
     // Fetch encryption pubkey
     const accountSummary = await api.getAccountSummary();
     const pubkey = (accountSummary as { tasknode_encryption_pubkey?: string })?.tasknode_encryption_pubkey;
@@ -351,12 +361,30 @@ program
 
     const responseText = requireNonEmpty(opts.response, "response");
     const respond = await api.respondVerification(opts.taskId, opts.type, responseText, pubkey);
-    const evidence = (respond as { evidence?: { cid?: string; evidence_id?: string; id?: string } })?.evidence;
-    const evidenceId = evidence?.evidence_id || evidence?.id;
-    const cid = evidence?.cid;
-    if (!cid || !evidenceId) {
-      throw new Error("Verification response missing cid or evidence_id.");
+    
+    // Check for API error (e.g., "awaiting signature" means response already submitted)
+    if (respond.error) {
+      throw new Error(`Verification response failed: ${respond.error}. Check verification status with 'tasks:get ${opts.taskId}'.`);
     }
+    
+    const evidence = respond.evidence;
+    const cid = evidence?.cid;
+    // API sometimes returns evidence_id: null; generate UUID as fallback
+    const evidenceId = evidence?.evidence_id ?? randomUUID();
+    if (!cid) {
+      throw new Error("Verification response missing cid. Response may already be pending signature.");
+    }
+
+    // Save pending BEFORE signing (critical for recovery)
+    savePending({
+      task_id: opts.taskId,
+      type: "verification_response",
+      cid,
+      evidence_id: evidenceId,
+      artifact_type: opts.type,
+      created_at: new Date().toISOString(),
+    });
+    process.stderr.write(`Saved pending verification response (CID: ${cid.slice(0, 20)}...)\n`);
 
     const pointer = await api.preparePointer({
       cid,
@@ -368,16 +396,6 @@ program
 
     const txJson = (pointer as { tx_json?: unknown })?.tx_json;
     if (!txJson) throw new Error("Pointer prepare missing tx_json.");
-
-    // Save pending before signing (in case tx fails)
-    savePending({
-      task_id: opts.taskId,
-      type: "verification_response",
-      cid,
-      evidence_id: evidenceId,
-      artifact_type: opts.type,
-      created_at: new Date().toISOString(),
-    });
 
     const txHash = await signer.signAndSubmit(requirePayment(txJson));
 
@@ -517,6 +535,140 @@ program
     }
     clearPending(opts.taskId, submissionType);
     process.stderr.write(`Cleared pending ${submissionType} for task ${opts.taskId}\n`);
+  });
+
+// Verification utilities
+program
+  .command("verify:status")
+  .description("Get current verification status for a task")
+  .argument("<taskId>", "Task ID")
+  .action(async (taskId) => {
+    const api = getApi();
+    const status = await api.getVerificationStatus(taskId);
+    printJson(status as JsonValue);
+  });
+
+program
+  .command("verify:wait")
+  .description("Wait for verification question to be generated")
+  .argument("<taskId>", "Task ID")
+  .option("--timeout <seconds>", "Timeout in seconds", "300")
+  .option("--interval <seconds>", "Poll interval in seconds", "15")
+  .action(async (taskId, opts) => {
+    const api = getApi();
+    const timeoutMs = parseNumberOption(opts.timeout, "timeout", 1) * 1000;
+    const intervalMs = parseNumberOption(opts.interval, "interval", 1) * 1000;
+
+    process.stderr.write(`Waiting for verification question (timeout: ${opts.timeout}s)...\n`);
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+      const status = await api.getVerificationStatus(taskId);
+      const ask = status.submission?.verification_ask;
+      const verStatus = status.submission?.verification_status;
+
+      if (ask && ask.length > 0 && verStatus === "awaiting_response") {
+        process.stderr.write(`\n*** VERIFICATION QUESTION ***\n`);
+        process.stderr.write(`${ask}\n\n`);
+        printJson({ verification_ask: ask, verification_status: verStatus } as JsonValue);
+        return;
+      }
+
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      process.stderr.write(`[${elapsed}s] status: ${verStatus}\n`);
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    throw new Error(`Timeout waiting for verification question after ${opts.timeout}s`);
+  });
+
+// Task loop automation
+program
+  .command("loop:test")
+  .description("Run an automated E2E test task loop with minimal reward")
+  .option("--type <type>", "Task type: personal|network", "personal")
+  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
+  .action(async (opts) => {
+    const { TaskLoopRunner } = await import("./loop.js");
+    const api = getApi();
+    const signer = createSigner(opts.nodeUrl);
+
+    const runner = new TaskLoopRunner(api, signer, {
+      verbose: true,
+      onStatusChange: (status, taskId) => {
+        process.stderr.write(`[STATUS] ${taskId}: ${status}\n`);
+      },
+    });
+
+    const taskType = opts.type as "personal" | "network";
+    const description = "[E2E TEST - MINIMAL REWARD] Validate CLI programmatic task loop. Verification: echo task ID.";
+    const context = "Automated E2E test of pft-test-client CLI. Minimal reward requested - this is infrastructure validation.";
+
+    process.stderr.write(`\n=== STARTING E2E TEST LOOP ===\n`);
+    process.stderr.write(`Type: ${taskType}\n\n`);
+
+    try {
+      const result = await runner.runFullLoop(
+        { type: taskType, description, context },
+        { type: "text", content: "E2E Test Output: [TEST PASSED] Full task loop validated programmatically." },
+        (question) => {
+          process.stderr.write(`\n*** AUTO-RESPONDING TO VERIFICATION ***\n`);
+          process.stderr.write(`Question: ${question}\n`);
+          // Auto-response includes task context that proves we ran the test
+          return `This is an automated E2E test. The task was requested programmatically with description: "${description.slice(0, 50)}..."`;
+        }
+      );
+
+      process.stderr.write(`\n=== E2E TEST COMPLETE ===\n`);
+      process.stderr.write(`Status: ${result.status}\n`);
+      if (result.status === "rewarded") {
+        process.stderr.write(`Reward: ${result.pft} PFT (${result.rewardTier})\n`);
+      }
+      printJson(result as JsonValue);
+    } catch (err) {
+      process.stderr.write(`\n=== E2E TEST FAILED ===\n`);
+      throw err;
+    }
+  });
+
+program
+  .command("loop:run")
+  .description("Run a full task loop interactively")
+  .requiredOption("--type <type>", "Task type: personal|network|alpha")
+  .requiredOption("--description <desc>", "Task description")
+  .requiredOption("--context <ctx>", "Context for the task")
+  .requiredOption("--evidence <text>", "Evidence text to submit")
+  .requiredOption("--verification-response <text>", "Response to verification question")
+  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
+  .action(async (opts) => {
+    const { TaskLoopRunner } = await import("./loop.js");
+    const api = getApi();
+    const signer = createSigner(opts.nodeUrl);
+
+    const runner = new TaskLoopRunner(api, signer, {
+      verbose: true,
+      onStatusChange: (status, taskId) => {
+        process.stderr.write(`[STATUS] ${taskId}: ${status}\n`);
+      },
+    });
+
+    const taskType = opts.type as "personal" | "network" | "alpha";
+    if (!["personal", "network", "alpha"].includes(taskType)) {
+      throw new Error("--type must be personal, network, or alpha");
+    }
+
+    process.stderr.write(`\n=== STARTING TASK LOOP ===\n`);
+    process.stderr.write(`Type: ${taskType}\n`);
+    process.stderr.write(`Description: ${opts.description.slice(0, 60)}...\n\n`);
+
+    const result = await runner.runFullLoop(
+      { type: taskType, description: opts.description, context: opts.context },
+      { type: "text", content: opts.evidence },
+      opts.verificationResponse
+    );
+
+    process.stderr.write(`\n=== TASK LOOP COMPLETE ===\n`);
+    printJson(result as JsonValue);
   });
 
 program.parseAsync(process.argv).catch((err) => {

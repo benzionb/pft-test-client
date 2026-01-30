@@ -199,6 +199,93 @@ npm run build:test
 npm test
 ```
 
+## E2E Testing
+
+The CLI includes a full end-to-end test harness that validates the complete task loop.
+
+### Quick Start
+
+```bash
+# Set credentials
+export PFT_TASKNODE_JWT="<your-jwt>"
+export PFT_WALLET_MNEMONIC="<24-word-phrase>"
+
+# Run the full E2E task loop (requests task, submits evidence, handles verification, waits for reward)
+pft-cli loop:test --type personal
+```
+
+This single command runs the **complete task lifecycle** from request to reward, typically taking 5-6 minutes.
+
+### What E2E Tests Validate
+
+1. **Authentication** - JWT validation, account summary retrieval
+2. **Task Request** - "Magic phrase" triggers `task_request_*` classification
+3. **Task Acceptance** - Status changes to `in_progress`
+4. **Evidence Submission** - Upload, XRPL signing, Task Node submission
+5. **Verification** - Question polling, response submission
+6. **Reward** - Final status polling until `rewarded` or `refused`
+
+### Automated Loop Commands
+
+```bash
+# Run full automated test (minimal reward task)
+pft-cli loop:test --type personal
+
+# Run custom task loop with your own parameters
+pft-cli loop:run \
+  --type personal \
+  --description "Build something" \
+  --context "My context..." \
+  --evidence "Here is my evidence" \
+  --verification-response "Here is my verification response"
+
+# Wait for verification question
+pft-cli verify:wait <task-id> --timeout 300 --interval 15
+
+# Check verification status
+pft-cli verify:status <task-id>
+```
+
+### Timed E2E Test (Development)
+
+For detailed step-by-step timing analysis:
+
+```bash
+npx tsx scripts/timed_e2e.ts
+```
+
+This outputs a breakdown showing how long each phase takes (useful for debugging/optimization).
+
+### Magic Phrases
+
+To trigger immediate task generation (bypassing discussion), use these patterns:
+
+| Phrase | Classification |
+|--------|----------------|
+| `request a personal task: [description]` | `task_request_personal` |
+| `request a network task: [description]` | `task_request_network` |
+| `request an alpha task: [description]` | `task_request_alpha` |
+| `generate a task for [description]` | `task_request_*` |
+| `give me a task to [description]` | `task_request_*` |
+
+### Troubleshooting
+
+**"Got discussion instead of task"**
+- Use explicit trigger phrase: `request a [type] task: [specific description]`
+- Include pre-scoped description so ODV doesn't need clarification
+
+**"Transaction not confirmed"**
+- XRPL transactions take ~4 seconds to finalize
+- Check wallet balance (need drops for transaction fees)
+
+**"Verification question never arrives"**
+- Poll for up to 5 minutes (`pft-cli verify:wait <id> --timeout 300`)
+- Check task status with `pft-cli tasks:get <id>`
+
+**"Pending submission exists"**
+- Resume: `pft-cli pending:resume --task-id <id> --type evidence`
+- Clear: `pft-cli pending:clear --task-id <id> --type evidence`
+
 ## Architecture
 
 ```
@@ -207,15 +294,19 @@ ts/
 │   ├── cli.ts           # CLI entry point (commander.js)
 │   ├── config.ts        # Configuration management
 │   ├── tasknode_api.ts  # Task Node API client
+│   ├── loop.ts          # TaskLoopRunner - high-level orchestrator
+│   ├── polling.ts       # Polling utilities for async state waits
 │   ├── client.ts        # High-level PFT client
 │   ├── signer.ts        # XRPL transaction signer
 │   ├── transaction.ts   # Transaction building
 │   ├── pointer.ts       # Memo encoding (protobuf-style)
+│   ├── pending.ts       # Pending submission recovery
 │   ├── ipfs.ts          # IPFS pinning via web3.storage
 │   ├── validation.ts    # Input validation
 │   └── utils.ts         # Shared utilities
 ├── test/
-│   └── pointer.test.ts  # Unit tests
+│   ├── pointer.test.ts       # Unit tests
+│   └── e2e_task_loop.test.ts # E2E integration tests
 └── dist/                # Compiled output
 ```
 

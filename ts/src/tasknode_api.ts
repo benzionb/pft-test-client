@@ -43,6 +43,34 @@ export type EvidenceUploadOptions = {
   x25519Pubkey?: string;
 };
 
+export type VerificationResponseResult = {
+  submission: {
+    id: string;
+    verification_status: string;
+    verification_ask: string;
+    verification_response: string;
+    verification_responded_at: string | null;
+  };
+  evidence?: {
+    cid: string;
+    evidence_id: string;
+    image_description?: string | null;
+  };
+  error?: string;
+};
+
+export type VerificationStatus = {
+  submission: {
+    id: string;
+    verification_ask: string;
+    verification_status: string;
+    verification_response: string | null;
+    verification_requested_at: string | null;
+    verification_responded_at: string | null;
+    verification_tx_hash: string | null;
+  };
+};
+
 function ensureWebApis() {
   if (typeof fetch !== "function") {
     throw new Error("Global fetch is not available. Use Node.js 18+.");
@@ -240,19 +268,23 @@ export class TaskNodeApi {
     return this.requestJson("POST", `/api/tasks/${taskId}/submit`, payload);
   }
 
+  async getVerificationStatus(taskId: string): Promise<VerificationStatus> {
+    return this.requestJson<VerificationStatus>("GET", `/api/tasks/${taskId}/verification`);
+  }
+
   async respondVerification(
     taskId: string,
     verificationType: string,
     responseText: string,
     x25519Pubkey?: string
-  ) {
+  ): Promise<VerificationResponseResult> {
     const form = new FormData();
     form.set("verification_type", requireNonEmpty(verificationType, "verification_type"));
     form.set("response", requireNonEmpty(responseText, "response"));
     if (x25519Pubkey) {
       form.set("x25519_pubkey", x25519Pubkey);
     }
-    return this.requestForm(`/api/tasks/${taskId}/verification/respond`, form);
+    return this.requestForm<VerificationResponseResult>(`/api/tasks/${taskId}/verification/respond`, form);
   }
 
   async submitVerification(taskId: string, payload: { cid: string; tx_hash: string; artifact_type: string; evidence_id: string }) {

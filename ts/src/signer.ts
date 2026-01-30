@@ -38,7 +38,9 @@ export class TransactionSigner {
     try {
       const response = await this.client.submitAndWait(txJson, { wallet: this.wallet });
       const result = response.result as any;
-      if (result.engine_result !== "tesSUCCESS") {
+      // Handle both engine_result (legacy) and meta.TransactionResult (current XRPL response format)
+      const txResult = result.engine_result || result.meta?.TransactionResult;
+      if (txResult !== "tesSUCCESS") {
         throw new SigningError(`Transaction failed: ${JSON.stringify(result)}`);
       }
       const txHash = result.hash || result.tx_json?.hash;
