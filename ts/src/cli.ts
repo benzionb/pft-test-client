@@ -610,20 +610,41 @@ program
     try {
       const result = await runner.runFullLoop(
         { type: taskType, description, context },
-        // Evidence callback - receives task so we can include the task ID
+        // Evidence callback - receives task so we can provide exactly what's required
         (task) => {
           process.stderr.write(`[TaskLoop] Task ID: ${task.id}\n`);
-          return {
-            type: "text",
-            content: `Task ID: ${task.id}\n\nE2E Test completed successfully. This automated test validates the full task loop.`,
-          };
+          process.stderr.write(`[TaskLoop] Verification type: ${task.verification.type}\n`);
+          process.stderr.write(`[TaskLoop] Verification criteria: ${task.verification.criteria}\n`);
+          
+          // Build evidence that directly addresses the verification criteria
+          const evidenceContent = [
+            `Task ID: ${task.id}`,
+            ``,
+            `Task: ${task.title}`,
+            ``,
+            `Verification Criteria: "${task.verification.criteria}"`,
+            ``,
+            `Evidence: This E2E test executed successfully. The task ID is ${task.id}.`,
+          ].join('\n');
+          
+          return { type: "text", content: evidenceContent };
         },
         // Verification response callback - receives question AND task
         (question, task) => {
           process.stderr.write(`\n*** AUTO-RESPONDING TO VERIFICATION ***\n`);
           process.stderr.write(`Question: ${question}\n`);
-          // Include the task ID prominently since that's what most E2E verifications ask for
-          return `Task ID: ${task.id}\n\nThis is the task ID as requested. The E2E test loop completed successfully.`;
+          process.stderr.write(`Original criteria: ${task.verification.criteria}\n`);
+          
+          // Build response that directly answers the verification question
+          const response = [
+            `Task ID: ${task.id}`,
+            ``,
+            `Verification Question: "${question}"`,
+            ``,
+            `Response: The task ID is ${task.id}. This E2E test completed the full loop successfully.`,
+          ].join('\n');
+          
+          return response;
         }
       );
 
