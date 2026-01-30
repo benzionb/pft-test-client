@@ -122,6 +122,13 @@ export class TaskNodeApi {
     if (!res.ok) {
       const text = await res.text();
       const snippet = text.length > 2000 ? `${text.slice(0, 2000)}...<truncated>` : text;
+      // Provide user-friendly messages for common errors
+      if (res.status === 401) {
+        throw new Error(`JWT expired or invalid. Get a fresh token from the Task Node and run: pft-cli auth:set-token "<jwt>"\n\nOriginal error: ${snippet}`);
+      }
+      if (res.status === 403) {
+        throw new Error(`Access forbidden. Your JWT may not have permission for this action.\n\nOriginal error: ${snippet}`);
+      }
       throw new Error(`HTTP ${res.status} ${res.statusText}: ${snippet}`);
     }
     return (await res.json()) as T;
@@ -149,6 +156,13 @@ export class TaskNodeApi {
     if (!res.ok) {
       const text = await res.text();
       const snippet = text.length > 2000 ? `${text.slice(0, 2000)}...<truncated>` : text;
+      // Provide user-friendly messages for common errors
+      if (res.status === 401) {
+        throw new Error(`JWT expired or invalid. Get a fresh token from the Task Node and run: pft-cli auth:set-token "<jwt>"\n\nOriginal error: ${snippet}`);
+      }
+      if (res.status === 403) {
+        throw new Error(`Access forbidden. Your JWT may not have permission for this action.\n\nOriginal error: ${snippet}`);
+      }
       throw new Error(`HTTP ${res.status} ${res.statusText}: ${snippet}`);
     }
     return (await res.json()) as T;

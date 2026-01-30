@@ -216,6 +216,56 @@ pft-cli loop:test --type personal
 
 This single command runs the **complete task lifecycle** from request to reward, typically taking 5-6 minutes.
 
+### What Success Looks Like
+
+```
+=== STARTING E2E TEST LOOP ===
+Type: personal
+
+[TaskLoop] Sending: "request a personal task: [E2E TEST - 1 PFT ONLY] Auto..."
+[TaskLoop] Task proposed: abc12345-6789-... - "Echo Task ID for E2E Test"
+[TaskLoop] Accepting task: abc12345-6789-...
+[TaskLoop] Task accepted. Status: in_progress
+[TaskLoop] Task ID: abc12345-6789-...
+[TaskLoop] Verification type: text
+[TaskLoop] Verification criteria: "Provide the task ID to confirm completion"
+[TaskLoop] Uploading evidence (type: text)
+[TaskLoop] Evidence uploaded. CID: bafkrei...
+[TaskLoop] Signing transaction...
+[TaskLoop] Transaction submitted: A1B2C3D4...
+[TaskLoop] Evidence submitted successfully
+[TaskLoop] Waiting for verification question...
+[TaskLoop] [15s] verification_status: generating_question
+[TaskLoop] [30s] verification_status: awaiting_response
+[TaskLoop] Verification question: "Please confirm the task ID..."
+
+*** AUTO-RESPONDING TO VERIFICATION ***
+Question: Please confirm the task ID...
+Original criteria: Provide the task ID to confirm completion
+
+[TaskLoop] Responding to verification...
+[TaskLoop] Saved pending (CID: bafkrei...)
+[TaskLoop] Signing verification transaction...
+[TaskLoop] Transaction submitted: E5F6G7H8...
+[TaskLoop] Verification response submitted successfully
+[TaskLoop] Watching for final status...
+[TaskLoop] [15s] status: pending_verification
+[TaskLoop] [30s] status: rewarded
+[TaskLoop] Task completed: rewarded
+[TaskLoop] Reward: 1 PFT (minimal)
+
+=== E2E TEST COMPLETE ===
+Status: rewarded
+Reward: 1 PFT (minimal)
+{
+  "id": "abc12345-6789-...",
+  "title": "Echo Task ID for E2E Test",
+  "status": "rewarded",
+  "pft": "1",
+  "rewardTier": "minimal"
+}
+```
+
 ### What E2E Tests Validate
 
 1. **Authentication** - JWT validation, account summary retrieval
@@ -270,21 +320,41 @@ To trigger immediate task generation (bypassing discussion), use these patterns:
 
 ### Troubleshooting
 
+**"JWT missing" or "Invalid JWT token"**
+- Get a fresh JWT from https://tasknode.postfiat.org (open DevTools → Network → find any API request → copy `Authorization: Bearer <jwt>`)
+- Set via: `export PFT_TASKNODE_JWT="<jwt>"` or `pft-cli auth:set-token "<jwt>"`
+- JWTs expire after ~24 hours
+
+**"PFT_WALLET_SEED or PFT_WALLET_MNEMONIC is required"**
+- For signing transactions, you need wallet credentials
+- Get your mnemonic from the Post Fiat app (Settings → Export Seed)
+- Set via: `export PFT_WALLET_MNEMONIC="word1 word2 ... word24"`
+
 **"Got discussion instead of task"**
 - Use explicit trigger phrase: `request a [type] task: [specific description]`
 - Include pre-scoped description so ODV doesn't need clarification
 
-**"Transaction not confirmed"**
+**"Transaction failed"**
 - XRPL transactions take ~4 seconds to finalize
 - Check wallet balance (need drops for transaction fees)
+- If you see `tesSUCCESS` in the error, the transaction actually succeeded (this was a bug that's now fixed)
 
 **"Verification question never arrives"**
 - Poll for up to 5 minutes (`pft-cli verify:wait <id> --timeout 300`)
 - Check task status with `pft-cli tasks:get <id>`
 
+**"Verification response not ready for submission"**
+- This is a timing issue - wait a few seconds and retry
+- The CLI handles this automatically in `loop:test`
+
 **"Pending submission exists"**
 - Resume: `pft-cli pending:resume --task-id <id> --type evidence`
 - Clear: `pft-cli pending:clear --task-id <id> --type evidence`
+
+**Task gets "refused" or low reward**
+- Make sure your evidence directly addresses the verification criteria
+- Include the task ID in responses when asked
+- The `loop:test` command dynamically builds responses from the task proposal
 
 ## Architecture
 

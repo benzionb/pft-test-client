@@ -160,17 +160,30 @@ describe("E2E Task Loop", () => {
         const result = await runner.runFullLoop(
           {
             type: "personal",
-            description: "[E2E TEST - MINIMAL REWARD] Validate CLI programmatic loop. Verification: confirm task ID.",
-            context: "Automated E2E test of pft-test-client. Minimal reward - infrastructure validation only.",
+            description: "[E2E TEST - 1 PFT ONLY] Automated infrastructure test. Echo the task ID to verify the loop works. Please reward only 1 PFT.",
+            context: "Automated E2E test of pft-test-client. This is infrastructure validation only - please use minimum reward (1 PFT).",
           },
-          {
+          // Evidence callback - receives task so we can provide exactly what's required
+          (task) => ({
             type: "text",
-            content: "E2E Test Evidence: [PASSED] Successfully executed programmatic task loop using TaskLoopRunner.",
-          },
-          (question) => {
-            // Dynamic response that proves we ran the test
-            return `E2E Test Response: Task loop executed programmatically. Question received: "${question.slice(0, 50)}..."`;
-          }
+            content: [
+              `Task ID: ${task.id}`,
+              ``,
+              `Task: ${task.title}`,
+              ``,
+              `Verification Criteria: "${task.verification.criteria}"`,
+              ``,
+              `Evidence: This E2E test executed successfully. The task ID is ${task.id}.`,
+            ].join('\n'),
+          }),
+          // Verification response callback - receives question AND task
+          (question, task) => [
+            `Task ID: ${task.id}`,
+            ``,
+            `Verification Question: "${question}"`,
+            ``,
+            `Response: The task ID is ${task.id}. This E2E test completed the full loop successfully.`,
+          ].join('\n')
         );
 
         const elapsed = Math.round((Date.now() - startTime) / 1000);
