@@ -5,6 +5,7 @@ import { resolveBaseUrl, resolveContextText, resolveJwt, resolveTimeoutMs, setCo
 import { TaskNodeApi } from "./tasknode_api.js";
 import { TransactionSigner } from "./index.js";
 import { requireNonEmpty, parseNumberOption } from "./utils.js";
+import { savePending, loadPending, clearPending, listPending, type PendingSubmission } from "./pending.js";
 
 type JsonValue = Record<string, unknown>;
 const TASK_STATUSES = ["outstanding", "pending", "rewarded", "refused", "cancelled"] as const;
@@ -301,6 +302,16 @@ program
     const txJson = (pointer as { tx_json?: unknown })?.tx_json;
     if (!txJson) throw new Error("Pointer prepare missing tx_json.");
 
+    // Save pending before signing (in case tx fails)
+    savePending({
+      task_id: opts.taskId,
+      type: "evidence",
+      cid,
+      evidence_id: evidenceId,
+      artifact_type: opts.type,
+      created_at: new Date().toISOString(),
+    });
+
     const txHash = await signer.signAndSubmit(requirePayment(txJson));
 
     const submit = await api.submitEvidence(opts.taskId, {
@@ -309,6 +320,9 @@ program
       artifact_type: opts.type,
       evidence_id: evidenceId,
     });
+
+    // Clear pending on success
+    clearPending(opts.taskId, "evidence");
 
     printJson({ upload, pointer, tx_hash: txHash, submit } as JsonValue);
   });
@@ -355,6 +369,16 @@ program
     const txJson = (pointer as { tx_json?: unknown })?.tx_json;
     if (!txJson) throw new Error("Pointer prepare missing tx_json.");
 
+    // Save pending before signing (in case tx fails)
+    savePending({
+      task_id: opts.taskId,
+      type: "verification_response",
+      cid,
+      evidence_id: evidenceId,
+      artifact_type: opts.type,
+      created_at: new Date().toISOString(),
+    });
+
     const txHash = await signer.signAndSubmit(requirePayment(txJson));
 
     const submit = await api.submitVerification(opts.taskId, {
@@ -363,6 +387,9 @@ program
       artifact_type: opts.type,
       evidence_id: evidenceId,
     });
+
+    // Clear pending on success
+    clearPending(opts.taskId, "verification_response");
 
     printJson({ respond, pointer, tx_hash: txHash, submit } as JsonValue);
   });
@@ -398,6 +425,98 @@ program
         await new Promise((resolve) => setTimeout(resolve, intervalMs));
       }
     }
+  });
+
+// Pending submissions management
+program
+  .command("pending:list")
+  .description("List pending submissions that failed to complete")
+  .action(() => {
+    const pending = listPending();
+    if (pending.length === 0) {
+      process.stderr.write("No pending submissions.\n");
+      printJson({ pending: [] });
+    } else {
+      printJson({ pending } as JsonValue);
+    }
+  });
+
+program
+  .command("pending:resume")
+  .description("Resume a pending submission (complete the on-chain transaction)")
+  .requiredOption("--task-id <taskId>", "Task ID")
+  .requiredOption("--type <type>", "evidence|verification_response")
+  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
+  .action(async (opts) => {
+    const submissionType = opts.type as "evidence" | "verification_response";
+    if (submissionType !== "evidence" && submissionType !== "verification_response") {
+      throw new Error("--type must be 'evidence' or 'verification_response'");
+    }
+
+    const pending = loadPending(opts.taskId, submissionType);
+    if (!pending) {
+      throw new Error(`No pending ${submissionType} submission found for task ${opts.taskId}`);
+    }
+
+    process.stderr.write(`Found pending submission:\n`);
+    process.stderr.write(`  CID: ${pending.cid}\n`);
+    process.stderr.write(`  Evidence ID: ${pending.evidence_id}\n`);
+    process.stderr.write(`  Created: ${pending.created_at}\n\n`);
+
+    const api = getApi();
+    const signer = createSigner(opts.nodeUrl);
+
+    // Prepare pointer
+    const pointer = await api.preparePointer({
+      cid: pending.cid,
+      task_id: pending.task_id,
+      kind: "TASK_SUBMISSION",
+      schema: 1,
+      flags: 1,
+    });
+
+    const txJson = (pointer as { tx_json?: unknown })?.tx_json;
+    if (!txJson) throw new Error("Pointer prepare missing tx_json.");
+
+    // Sign and submit
+    const txHash = await signer.signAndSubmit(requirePayment(txJson));
+
+    // Submit to Task Node
+    let submit;
+    if (submissionType === "evidence") {
+      submit = await api.submitEvidence(pending.task_id, {
+        cid: pending.cid,
+        tx_hash: txHash,
+        artifact_type: pending.artifact_type,
+        evidence_id: pending.evidence_id,
+      });
+    } else {
+      submit = await api.submitVerification(pending.task_id, {
+        cid: pending.cid,
+        tx_hash: txHash,
+        artifact_type: pending.artifact_type,
+        evidence_id: pending.evidence_id,
+      });
+    }
+
+    // Clear pending on success
+    clearPending(pending.task_id, submissionType);
+
+    printJson({ resumed: pending, pointer, tx_hash: txHash, submit } as JsonValue);
+  });
+
+program
+  .command("pending:clear")
+  .description("Clear a pending submission (abandon without completing)")
+  .requiredOption("--task-id <taskId>", "Task ID")
+  .requiredOption("--type <type>", "evidence|verification_response")
+  .action((opts) => {
+    const submissionType = opts.type as "evidence" | "verification_response";
+    if (submissionType !== "evidence" && submissionType !== "verification_response") {
+      throw new Error("--type must be 'evidence' or 'verification_response'");
+    }
+    clearPending(opts.taskId, submissionType);
+    process.stderr.write(`Cleared pending ${submissionType} for task ${opts.taskId}\n`);
   });
 
 program.parseAsync(process.argv).catch((err) => {
