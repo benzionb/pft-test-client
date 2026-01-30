@@ -219,6 +219,77 @@ ts/
 └── dist/                # Compiled output
 ```
 
+## Pending Submissions Recovery
+
+If a transaction fails after evidence upload (e.g., network error during signing), the CLI saves the pending submission locally:
+
+```bash
+# List stuck submissions
+pft-cli pending:list
+
+# Resume a failed evidence submission
+pft-cli pending:resume --task-id <id> --type evidence
+
+# Resume a failed verification response
+pft-cli pending:resume --task-id <id> --type verification_response
+
+# Clear a stuck submission without completing
+pft-cli pending:clear --task-id <id> --type evidence
+```
+
+Pending submissions are stored in `~/.pft-tasknode/pending/`.
+
+## API Debugging with mitmproxy
+
+To capture and analyze Task Node API traffic for debugging or reverse engineering:
+
+### Setup
+
+```bash
+# Install mitmproxy (one-time)
+pip3 install mitmproxy
+
+# Start the proxy (saves traffic to flow file)
+mitmdump --listen-port 8080 \
+  -w ~/captures/session_$(date +%Y%m%d_%H%M%S).flow \
+  > /tmp/mitmdump.log 2>&1 &
+
+# Launch Chrome with proxy configured
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --proxy-server="localhost:8080" \
+  --ignore-certificate-errors \
+  --user-data-dir="/tmp/chrome-proxy-profile" \
+  "https://tasknode.postfiat.org"
+```
+
+### Monitor Traffic
+
+```bash
+# Watch live traffic
+tail -f /tmp/mitmdump.log | grep tasknode
+
+# Export to HAR for analysis
+mitmdump -n -r ~/captures/session_*.flow --set hardump=./export.har
+```
+
+### Analyze HAR File
+
+```python
+import json
+
+with open('export.har') as f:
+    har = json.load(f)
+
+for entry in har['log']['entries']:
+    req = entry['request']
+    if 'tasknode' in req['url']:
+        print(f"{req['method']} {req['url']}")
+        if req.get('postData'):
+            print(f"  Body: {req['postData'].get('text', '')[:200]}")
+```
+
+This method captures all HTTP/HTTPS traffic including request/response bodies, headers, and WebSocket messages.
+
 ## Notes
 
 - Default endpoints point to Post Fiat testnet
