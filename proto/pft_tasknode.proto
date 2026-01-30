@@ -1,0 +1,186 @@
+syntax = "proto3";
+
+package postfiat.v3;
+
+option go_package = "postfiat/v3;postfiatv3";
+option java_package = "com.postfiat.v3";
+option java_multiple_files = true;
+option csharp_namespace = "PostFiat.V3";
+
+// Task Node domain messages derived from reverse engineered API.
+//
+// Observed sources:
+// - /api/tasks/summary, /api/tasks/{id}, /api/tasks/{id}/verification
+// - /api/chat/messages (task generation in metadata.odv.task_generation)
+// - /api/wallet/transactions (memo references only, no governance payloads)
+//
+// Not observed:
+// - Governance votes, proposals, or validator governance flows
+// - Canonical on-chain governance message schemas
+//
+// GovernanceMessage below is speculative and should be revised once
+// actual governance payloads are captured.
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum TaskType {
+  TASK_TYPE_UNSPECIFIED = 0;
+  TASK_TYPE_PERSONAL = 1;
+  TASK_TYPE_NETWORK = 2;
+  TASK_TYPE_ALPHA = 3;
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_PROPOSED = 1;
+  TASK_STATUS_IN_PROGRESS = 2;
+  TASK_STATUS_PENDING_VERIFICATION = 3;
+  TASK_STATUS_REWARDED = 4;
+  TASK_STATUS_REFUSED = 5;
+}
+
+enum RewardTier {
+  REWARD_TIER_UNSPECIFIED = 0;
+  REWARD_TIER_EXCEPTIONAL = 1; // 95+ score
+  REWARD_TIER_VERY_GOOD = 2;   // 85-94 score
+  REWARD_TIER_GOOD = 3;
+  REWARD_TIER_STANDARD = 4;
+  REWARD_TIER_MINIMAL = 5;
+}
+
+enum VerificationType {
+  VERIFICATION_TYPE_UNSPECIFIED = 0;
+  VERIFICATION_TYPE_CODE = 1;
+  VERIFICATION_TYPE_FILE = 2;
+  VERIFICATION_TYPE_TEXT = 3;
+  VERIFICATION_TYPE_URL = 4;
+  VERIFICATION_TYPE_SCREENSHOT = 5;
+}
+
+enum InstructionType {
+  INSTRUCTION_TYPE_UNSPECIFIED = 0;
+  INSTRUCTION_TYPE_TASK_GENERATION = 1;
+  INSTRUCTION_TYPE_VERIFICATION_REQUEST = 2;
+  INSTRUCTION_TYPE_REWARD_DISTRIBUTION = 3;
+  INSTRUCTION_TYPE_CONTEXT_UPDATE = 4;
+}
+
+// NOTE: GovernanceAction is speculative (not observed in captures).
+enum GovernanceAction {
+  GOVERNANCE_ACTION_UNSPECIFIED = 0;
+  GOVERNANCE_ACTION_VOTE = 1;
+  GOVERNANCE_ACTION_PROPOSAL = 2;
+  GOVERNANCE_ACTION_VALIDATOR_ADD = 3;
+  GOVERNANCE_ACTION_VALIDATOR_REMOVE = 4;
+}
+
+// ============================================================================
+// Task Messages
+// ============================================================================
+
+message TaskStep {
+  string id = 1;
+  string text = 2;
+  bool done = 3;
+}
+
+message VerificationRequest {
+  VerificationType type = 1;
+  string criteria = 2;
+  string question = 3; // verificationAsk
+  string response = 4; // user's response
+}
+
+message TaskMessage {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  TaskType type = 4;
+  TaskStatus status = 5;
+
+  // Timestamps (milliseconds since epoch)
+  int64 created_at = 6;
+  int64 accepted_at = 7;
+  int64 submitted_at = 8;
+  int64 rewarded_at = 9;
+
+  // Reward info
+  string pft_offer = 10;
+  string pft_actual = 11;
+  RewardTier reward_tier = 12;
+  int32 reward_score = 13;
+  string reward_tx_hash = 14;
+
+  // Task structure
+  repeated TaskStep steps = 15;
+  VerificationRequest verification = 16;
+  string requirements = 17;
+
+  // Context
+  string alignment = 18;
+  string network_value = 19;
+  string pft_offer_rationale = 20;
+
+  // Evidence
+  string evidence_cid = 21;
+  string evidence_id = 22;
+
+  // Refusal/cancellation
+  string refusal_reason = 23;
+  string cancellation_reason = 24;
+}
+
+// ============================================================================
+// Instruction Messages
+// ============================================================================
+
+message InstructionMessage {
+  string id = 1;
+  InstructionType type = 2;
+  string origin_message = 3;
+
+  // Task generation specific
+  TaskMessage proposed_task = 4;
+
+  // Verification specific
+  VerificationRequest verification = 5;
+
+  // Reward specific
+  string reward_amount_drops = 6;
+  string recipient_address = 7;
+
+  // Context specific
+  string context_cid = 8;
+  int32 context_version = 9;
+
+  // Metadata
+  string model_used = 10;
+  string prompt_name = 11;
+  string prompt_version = 12;
+  int64 timestamp = 13;
+}
+
+// ============================================================================
+// Governance Messages (speculative, not yet observed)
+// ============================================================================
+
+// GovernanceMessage fields are placeholders based on common patterns.
+// Replace these once actual governance payloads are captured.
+message GovernanceMessage {
+  string id = 1;
+  GovernanceAction action = 2;
+  string proposal_id = 3;
+
+  // Vote specific
+  bool vote_approve = 4;
+  string vote_reason = 5;
+
+  // Validator specific
+  string validator_address = 6;
+
+  // Metadata
+  int64 timestamp = 7;
+  map<string, string> metadata = 8;
+}
