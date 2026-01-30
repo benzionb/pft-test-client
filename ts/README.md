@@ -290,10 +290,76 @@ for entry in har['log']['entries']:
 
 This method captures all HTTP/HTTPS traffic including request/response bodies, headers, and WebSocket messages.
 
+## Pointer Memo Encoding
+
+Task submissions use XRPL Payment transactions with encoded memos. The memo format is protobuf-style binary encoding:
+
+### Memo Structure
+
+| Field | Type | Description |
+|-------|------|-------------|
+| MemoType | hex | `70662e707472` = "pf.ptr" (Post Fiat Pointer) |
+| MemoFormat | hex | `7634` = "v4" (version) |
+| MemoData | hex | Protobuf-encoded pointer data |
+
+### MemoData Encoding (Protobuf-style)
+
+```
+Field 1 (string): CID - IPFS content identifier (e.g., "bafkrei...")
+Field 2 (varint): Schema version (typically 1)
+Field 3 (varint): Kind - 6 = TASK_SUBMISSION
+Field 4 (varint): Flags (typically 1)
+Field 8 (varint): Unknown/reserved (typically 1)
+```
+
+### Wire Format
+
+Each field is encoded as:
+- **Key**: `(field_number << 3) | wire_type` as varint
+- **Value**: 
+  - wire_type 0 (varint): value as varint
+  - wire_type 2 (length-delimited): length as varint, then bytes
+
+### Example
+
+```typescript
+import { encodePointerMemo } from "pft-test-client";
+
+const memo = encodePointerMemo(
+  "bafkreidwhi5ztzuqqnc3tu62tzqofhko5hnbhxfckmvboyrg7dz5sakgtu",
+  "TASK_SUBMISSION",  // kind
+  1,                  // schema
+  1,                  // flags
+  1                   // unknown8
+);
+
+// Result: Uint8Array that gets hex-encoded for MemoData
+// 0a3b6261666b726569647768693574...
+```
+
+### Transaction Structure
+
+```json
+{
+  "TransactionType": "Payment",
+  "Account": "<your-wallet>",
+  "Destination": "rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7",
+  "Amount": "1",
+  "Memos": [{
+    "Memo": {
+      "MemoType": "70662e707472",
+      "MemoFormat": "7634",
+      "MemoData": "<hex-encoded-pointer>"
+    }
+  }]
+}
+```
+
+The destination address (`rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7`) is the Task Node's submission receiver.
+
 ## Notes
 
 - Default endpoints point to Post Fiat testnet
-- Memo encoding follows observed protocol patterns
 - Transaction signing requires either `PFT_WALLET_SEED` or `PFT_WALLET_MNEMONIC`
 
 ## License
