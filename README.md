@@ -6,4 +6,7 @@ Public reference implementation of Post Fiat Task Node client core logic:
 - XRP transaction construction
 - Transaction signing and submission
 
-See `sdk/README.md` for details, defaults, and limitations.
+See `sdk/README.md` for Python implementation details.
+
+TypeScript implementation lives in `ts/` and is the canonical submission for
+the current task requirement (hashing + IPFS pinning + tx construction).
