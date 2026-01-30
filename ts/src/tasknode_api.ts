@@ -4,6 +4,37 @@ import { requireNonEmpty } from "./utils.js";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
+export type TaskProposal = {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  pft_offer: string;
+  verification: {
+    type: string;
+    criteria: string;
+  };
+  steps: Array<{ id: string; done: boolean; text: string }>;
+  task_category: string;
+  alignment: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  classification_tag?: string;
+  metadata?: {
+    task?: TaskProposal;
+    odv?: {
+      task_generation?: {
+        output: string;
+      };
+    };
+  };
+};
+
 export type EvidenceUploadOptions = {
   verificationType: string;
   artifact: string;
@@ -117,6 +148,51 @@ export class TaskNodeApi {
       chat_type: chatType,
       context_text: contextText,
     });
+  }
+
+  async listChat(limit = 10) {
+    return this.requestJson<{ messages: ChatMessage[] }>("GET", `/api/chat/messages?limit=${limit}`);
+  }
+
+  /**
+   * Send a chat message and wait for the assistant response.
+   * Polls until an assistant message newer than our sent message appears.
+   */
+  async sendChatAndWait(
+    content: string,
+    contextText: string,
+    chatType = "chat",
+    maxWaitMs = 60000,
+    pollIntervalMs = 3000
+  ): Promise<{ userMessage: unknown; assistantMessage: ChatMessage | null }> {
+    const startTime = Date.now();
+    
+    // Send the message
+    const sendResult = await this.sendChat(content, contextText, chatType);
+    const userMessageId = (sendResult as { message?: { id?: string } })?.message?.id;
+    const userMessageTime = (sendResult as { message?: { created_at?: string } })?.message?.created_at;
+    
+    if (!userMessageTime) {
+      return { userMessage: sendResult, assistantMessage: null };
+    }
+    
+    // Poll for assistant response
+    while (Date.now() - startTime < maxWaitMs) {
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+      
+      const { messages } = await this.listChat(5);
+      
+      // Find assistant message newer than our user message
+      const assistantMsg = messages.find(
+        m => m.role === "assistant" && m.created_at > userMessageTime
+      );
+      
+      if (assistantMsg) {
+        return { userMessage: sendResult, assistantMessage: assistantMsg };
+      }
+    }
+    
+    return { userMessage: sendResult, assistantMessage: null };
   }
 
   async uploadEvidence(taskId: string, options: EvidenceUploadOptions) {

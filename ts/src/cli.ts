@@ -20,6 +20,15 @@ function requirePayment(txJson: unknown): Payment {
   return tx as Payment;
 }
 
+function createSigner(nodeUrl?: string) {
+  const seed = process.env.PFT_WALLET_SEED;
+  const mnemonic = process.env.PFT_WALLET_MNEMONIC;
+  if (!seed && !mnemonic) {
+    throw new Error("PFT_WALLET_SEED or PFT_WALLET_MNEMONIC is required for signing.");
+  }
+  return new TransactionSigner({ seed, mnemonic, nodeUrl });
+}
+
 function requireJwt(): string {
   const jwt = resolveJwt();
   if (!jwt) {
@@ -107,16 +116,130 @@ program
 // Chat
 program
   .command("chat:send")
-  .description("Send a chat message (task request, discussion, etc.)")
+  .description("Send a chat message and optionally wait for assistant response")
   .requiredOption("--content <content>", "Message content")
   .option("--context <context>", "Context text (falls back to config/env)")
+  .option("--wait", "Wait for assistant response (polls until response arrives)")
+  .option("--timeout <ms>", "Max wait time in ms (default: 60000)", "60000")
   .action(async (opts) => {
     const api = getApi();
     const contextText = opts.context || resolveContextText();
     const content = requireNonEmpty(opts.content, "content");
     const context = requireNonEmpty(contextText, "context");
-    const response = await api.sendChat(content, context);
-    printJson(response as JsonValue);
+    
+    if (opts.wait) {
+      const timeoutMs = parseNumberOption(opts.timeout, "timeout", 1000);
+      process.stderr.write("Sending message and waiting for response...\n");
+      const { userMessage, assistantMessage } = await api.sendChatAndWait(content, context, "chat", timeoutMs);
+      
+      if (assistantMessage) {
+        // Check if this is a task proposal (has task metadata with id)
+        const taskProposal = assistantMessage.metadata?.task;
+        const isTaskProposal = !!taskProposal?.id;
+        
+        const result: JsonValue = {
+          user_message: userMessage,
+          assistant_response: {
+            id: assistantMessage.id,
+            content: assistantMessage.content,
+            classification: assistantMessage.classification_tag,
+            created_at: assistantMessage.created_at,
+            is_task_proposal: isTaskProposal,
+          },
+        };
+        
+        // If task proposal, include task details prominently
+        if (isTaskProposal && taskProposal) {
+          (result as Record<string, unknown>).task_proposal = {
+            task_id: taskProposal.id,
+            title: taskProposal.title,
+            description: taskProposal.description,
+            pft_offer: taskProposal.pft_offer,
+            verification_type: taskProposal.verification?.type,
+            status: taskProposal.status,
+            steps: taskProposal.steps?.length || 0,
+          };
+          process.stderr.write(`\n*** TASK PROPOSAL DETECTED ***\n`);
+          process.stderr.write(`Task ID: ${taskProposal.id}\n`);
+          process.stderr.write(`Title: ${taskProposal.title}\n`);
+          process.stderr.write(`PFT Offer: ${taskProposal.pft_offer}\n`);
+          process.stderr.write(`\nTo accept: pft-cli tasks:accept ${taskProposal.id}\n\n`);
+        }
+        
+        printJson(result);
+      } else {
+        process.stderr.write("Timeout: No assistant response received.\n");
+        printJson({ user_message: userMessage, assistant_response: null } as JsonValue);
+      }
+    } else {
+      const response = await api.sendChat(content, context);
+      printJson(response as JsonValue);
+    }
+  });
+
+program
+  .command("chat:list")
+  .description("List recent chat messages")
+  .option("--limit <n>", "Number of messages to fetch", "10")
+  .action(async (opts) => {
+    const api = getApi();
+    const limit = parseNumberOption(opts.limit, "limit", 1);
+    const { messages } = await api.listChat(limit);
+    
+    // Sort by created_at descending (newest first) for display
+    const sorted = [...messages].sort((a, b) => 
+      b.created_at.localeCompare(a.created_at)
+    );
+    
+    printJson({ messages: sorted } as JsonValue);
+  });
+
+program
+  .command("chat:pending-task")
+  .description("Check for pending task proposals in recent chat history")
+  .action(async () => {
+    const api = getApi();
+    const { messages } = await api.listChat(10);
+    
+    // Find the most recent task proposal (assistant message with task metadata)
+    const taskProposal = messages
+      .filter(m => m.role === "assistant" && m.metadata?.task?.id)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+    
+    if (taskProposal?.metadata?.task) {
+      const task = taskProposal.metadata.task;
+      
+      // Check if this task is already accepted (in_progress or later)
+      const taskStatus = await api.getTask(task.id).catch(() => null);
+      const actualStatus = (taskStatus as { task?: { status?: string } })?.task?.status;
+      
+      const isPending = !actualStatus || actualStatus === "pending";
+      
+      process.stderr.write(isPending 
+        ? `\n*** PENDING TASK PROPOSAL ***\n`
+        : `\n*** TASK ALREADY ACCEPTED ***\n`);
+      process.stderr.write(`Task ID: ${task.id}\n`);
+      process.stderr.write(`Title: ${task.title}\n`);
+      process.stderr.write(`PFT Offer: ${task.pft_offer}\n`);
+      process.stderr.write(`Status: ${actualStatus || task.status}\n`);
+      
+      if (isPending) {
+        process.stderr.write(`\nTo accept: pft-cli tasks:accept ${task.id}\n\n`);
+      }
+      
+      printJson({
+        task_id: task.id,
+        title: task.title,
+        description: task.description,
+        pft_offer: task.pft_offer,
+        verification_type: task.verification?.type,
+        status: actualStatus || task.status,
+        can_accept: isPending,
+      } as JsonValue);
+    } else {
+      process.stderr.write("No pending task proposals found in recent chat history.\n");
+      printJson({ task_proposal: null } as JsonValue);
+    }
   });
 
 // Evidence submission flow
@@ -131,11 +254,10 @@ program
   .option("--kind <kind>", "Pointer kind", "TASK_SUBMISSION")
   .option("--schema <schema>", "Pointer schema", "1")
   .option("--flags <flags>", "Pointer flags", "1")
-  .option("--node-url <url>", "XRPL node URL", "https://rpc.testnet.postfiat.org:6008")
+  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
   .action(async (opts) => {
     const api = getApi();
-    const seed = process.env.PFT_WALLET_SEED;
-    if (!seed) throw new Error("PFT_WALLET_SEED is required for signing.");
+    const signer = createSigner(opts.nodeUrl);
 
     const accountSummary = await api.getAccountSummary();
     const pubkey = (accountSummary as { tasknode_encryption_pubkey?: string })?.tasknode_encryption_pubkey;
@@ -179,7 +301,6 @@ program
     const txJson = (pointer as { tx_json?: unknown })?.tx_json;
     if (!txJson) throw new Error("Pointer prepare missing tx_json.");
 
-    const signer = new TransactionSigner(seed, opts.nodeUrl);
     const txHash = await signer.signAndSubmit(requirePayment(txJson));
 
     const submit = await api.submitEvidence(opts.taskId, {
@@ -202,11 +323,10 @@ program
   .option("--kind <kind>", "Pointer kind", "TASK_SUBMISSION")
   .option("--schema <schema>", "Pointer schema", "1")
   .option("--flags <flags>", "Pointer flags", "1")
-  .option("--node-url <url>", "XRPL node URL", "https://rpc.testnet.postfiat.org:6008")
+  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
   .action(async (opts) => {
     const api = getApi();
-    const seed = process.env.PFT_WALLET_SEED;
-    if (!seed) throw new Error("PFT_WALLET_SEED is required for signing.");
+    const signer = createSigner(opts.nodeUrl);
 
     const responseText = requireNonEmpty(opts.response, "response");
     const respond = await api.respondVerification(opts.taskId, opts.type, responseText);
@@ -228,7 +348,6 @@ program
     const txJson = (pointer as { tx_json?: unknown })?.tx_json;
     if (!txJson) throw new Error("Pointer prepare missing tx_json.");
 
-    const signer = new TransactionSigner(seed, opts.nodeUrl);
     const txHash = await signer.signAndSubmit(requirePayment(txJson));
 
     const submit = await api.submitVerification(opts.taskId, {

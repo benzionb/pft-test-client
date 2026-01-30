@@ -7,8 +7,8 @@ export class PFTClientError extends Error {}
 export class PFTClient {
   signer: TransactionSigner;
 
-  constructor(walletSeed: string, nodeUrl = "https://rpc.testnet.postfiat.org:6008") {
-    this.signer = new TransactionSigner(walletSeed, nodeUrl);
+  constructor(walletSeed: string, nodeUrl = "wss://rpc.testnet.postfiat.org:6008") {
+    this.signer = new TransactionSigner({ seed: walletSeed, nodeUrl });
   }
 
   async pinToIPFS(payload: Uint8Array, apiToken: string) {
