@@ -610,12 +610,20 @@ program
     try {
       const result = await runner.runFullLoop(
         { type: taskType, description, context },
-        { type: "text", content: "E2E Test Output: [TEST PASSED] Full task loop validated programmatically." },
-        (question) => {
+        // Evidence callback - receives task so we can include the task ID
+        (task) => {
+          process.stderr.write(`[TaskLoop] Task ID: ${task.id}\n`);
+          return {
+            type: "text",
+            content: `Task ID: ${task.id}\n\nE2E Test completed successfully. This automated test validates the full task loop.`,
+          };
+        },
+        // Verification response callback - receives question AND task
+        (question, task) => {
           process.stderr.write(`\n*** AUTO-RESPONDING TO VERIFICATION ***\n`);
           process.stderr.write(`Question: ${question}\n`);
-          // Auto-response includes task context that proves we ran the test
-          return `This is an automated E2E test. The task was requested programmatically with description: "${description.slice(0, 50)}..."`;
+          // Include the task ID prominently since that's what most E2E verifications ask for
+          return `Task ID: ${task.id}\n\nThis is the task ID as requested. The E2E test loop completed successfully.`;
         }
       );
 

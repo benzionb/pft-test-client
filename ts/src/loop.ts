@@ -337,13 +337,13 @@ export class TaskLoopRunner {
    * Run the complete task loop from request to reward.
    * 
    * @param request - Task request details
-   * @param evidence - Evidence to submit
-   * @param verificationResponse - Response to verification question (string or function that takes question)
+   * @param evidence - Evidence to submit (string or function that receives task and returns evidence)
+   * @param verificationResponse - Response to verification question (string or function that receives question AND task)
    */
   async runFullLoop(
     request: TaskRequest,
-    evidence: EvidenceInput,
-    verificationResponse: string | ((question: string) => string)
+    evidence: EvidenceInput | ((task: TaskProposal) => EvidenceInput),
+    verificationResponse: string | ((question: string, task: TaskProposal) => string)
   ): Promise<FinalTask> {
     // 1. Request task
     const task = await this.requestTask(request);
@@ -351,15 +351,16 @@ export class TaskLoopRunner {
     // 2. Accept task
     await this.acceptTask(task.id);
     
-    // 3. Submit evidence
-    await this.submitEvidence(task.id, evidence);
+    // 3. Submit evidence - can be dynamic based on task
+    const evidenceInput = typeof evidence === "function" ? evidence(task) : evidence;
+    await this.submitEvidence(task.id, evidenceInput);
     
     // 4. Wait for verification question
     const question = await this.waitForVerification(task.id);
     
-    // 5. Respond to verification
+    // 5. Respond to verification - receives both question AND task for context
     const response = typeof verificationResponse === "function"
-      ? verificationResponse(question)
+      ? verificationResponse(question, task)
       : verificationResponse;
     await this.respondToVerification(task.id, response);
     
