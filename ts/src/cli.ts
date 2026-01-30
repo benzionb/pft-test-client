@@ -328,8 +328,15 @@ program
     const api = getApi();
     const signer = createSigner(opts.nodeUrl);
 
+    // Fetch encryption pubkey
+    const accountSummary = await api.getAccountSummary();
+    const pubkey = (accountSummary as { tasknode_encryption_pubkey?: string })?.tasknode_encryption_pubkey;
+    if (!pubkey) {
+      throw new Error("Account summary missing tasknode_encryption_pubkey.");
+    }
+
     const responseText = requireNonEmpty(opts.response, "response");
-    const respond = await api.respondVerification(opts.taskId, opts.type, responseText);
+    const respond = await api.respondVerification(opts.taskId, opts.type, responseText, pubkey);
     const evidence = (respond as { evidence?: { cid?: string; evidence_id?: string; id?: string } })?.evidence;
     const evidenceId = evidence?.evidence_id || evidence?.id;
     const cid = evidence?.cid;

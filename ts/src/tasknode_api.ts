@@ -224,9 +224,13 @@ export class TaskNodeApi {
       const filename = path.basename(filePath);
       form.set("artifact", new Blob([buffer]), filename);
     } else if (options.artifactJson) {
+      // artifactJson is already a JSON string
       form.set("artifact", requireNonEmpty(options.artifactJson, "artifactJson"));
     } else {
-      form.set("artifact", requireNonEmpty(options.artifact, "artifact"));
+      // For URL/text types, wrap in JSON object with the verification type as key
+      const content = requireNonEmpty(options.artifact, "artifact");
+      const artifactJson = JSON.stringify({ [verificationType]: content });
+      form.set("artifact", artifactJson);
     }
 
     return this.requestForm(`/api/tasks/${taskId}/evidence`, form);
@@ -236,10 +240,18 @@ export class TaskNodeApi {
     return this.requestJson("POST", `/api/tasks/${taskId}/submit`, payload);
   }
 
-  async respondVerification(taskId: string, verificationType: string, responseText: string) {
+  async respondVerification(
+    taskId: string,
+    verificationType: string,
+    responseText: string,
+    x25519Pubkey?: string
+  ) {
     const form = new FormData();
     form.set("verification_type", requireNonEmpty(verificationType, "verification_type"));
     form.set("response", requireNonEmpty(responseText, "response"));
+    if (x25519Pubkey) {
+      form.set("x25519_pubkey", x25519Pubkey);
+    }
     return this.requestForm(`/api/tasks/${taskId}/verification/respond`, form);
   }
 
