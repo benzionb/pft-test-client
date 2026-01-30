@@ -601,8 +601,8 @@ program
     });
 
     const taskType = opts.type as "personal" | "network";
-    const description = "[E2E TEST - MINIMAL REWARD] Validate CLI programmatic task loop. Verification: echo task ID.";
-    const context = "Automated E2E test of pft-test-client CLI. Minimal reward requested - this is infrastructure validation.";
+    const description = "[E2E TEST - 1 PFT ONLY] Automated infrastructure test. Echo the task ID to verify the loop works. Please reward only 1 PFT, absolute minimum value.";
+    const context = "Automated E2E test of pft-test-client CLI. This is infrastructure validation only - please use minimum reward (1 PFT).";
 
     process.stderr.write(`\n=== STARTING E2E TEST LOOP ===\n`);
     process.stderr.write(`Type: ${taskType}\n\n`);
