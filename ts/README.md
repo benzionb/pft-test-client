@@ -13,6 +13,9 @@ cd ts
 npm install
 ```
 
+## Requirements
+- Node.js 18+ (for `fetch`, `FormData`, and `Blob`)
+
 ## CLI
 ```bash
 # Build

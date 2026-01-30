@@ -25,8 +25,8 @@ export function saveConfig(config: CliConfig): void {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
   try {
     fs.chmodSync(CONFIG_PATH, 0o600);
-  } catch {
-    // Best-effort permissions.
+  } catch (err) {
+    process.stderr.write(`Warning: unable to set config permissions (600): ${String(err)}\n`);
   }
 }
 

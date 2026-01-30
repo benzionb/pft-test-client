@@ -21,7 +21,7 @@ export async function pinToIPFSWeb3Storage(
     const response = await fetch(uploadUrl, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiToken}` },
-      body: body as unknown as BodyInit,
+      body: body,
     });
 
     if (!response.ok) {

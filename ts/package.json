@@ -13,6 +13,9 @@
   "bin": {
     "pft-cli": "dist/cli.js"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "commander": "^12.1.0",
     "xrpl": "^4.2.0"

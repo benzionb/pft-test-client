@@ -1,10 +1,38 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import type { Payment } from "xrpl";
 import { resolveBaseUrl, resolveContextText, resolveJwt, setConfigValue } from "./config.js";
 import { TaskNodeApi } from "./tasknode_api.js";
 import { TransactionSigner } from "./index.js";
 
 type JsonValue = Record<string, unknown>;
+const TASK_STATUSES = ["outstanding", "pending", "rewarded", "refused", "cancelled"] as const;
+
+function requireNonEmpty(value: string | undefined, label: string): string {
+  if (!value || value.trim().length === 0) {
+    throw new Error(`${label} is required`);
+  }
+  return value.trim();
+}
+
+function parseNumberOption(value: string, label: string, min = 0): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < min) {
+    throw new Error(`${label} must be a number >= ${min}`);
+  }
+  return parsed;
+}
+
+function requirePayment(txJson: unknown): Payment {
+  if (!txJson || typeof txJson !== "object") {
+    throw new Error("Pointer tx_json is not an object.");
+  }
+  const tx = txJson as Partial<Payment>;
+  if (!tx.Account || !tx.Amount || !tx.Destination || tx.TransactionType !== "Payment") {
+    throw new Error("Pointer tx_json missing required Payment fields.");
+  }
+  return tx as Payment;
+}
 
 function requireJwt(): string {
   const jwt = resolveJwt();
@@ -62,8 +90,11 @@ program
   .action(async (opts) => {
     const api = getApi();
     const summary = await api.getTasksSummary();
-    const status = opts.status;
-    const tasks = (summary as any)?.tasks?.[status] || [];
+    const status = opts.status as string;
+    if (!TASK_STATUSES.includes(status as (typeof TASK_STATUSES)[number])) {
+      throw new Error(`Invalid status: ${status}`);
+    }
+    const tasks = (summary as { tasks?: Record<string, unknown> })?.tasks?.[status] || [];
     await printJson({ status, tasks });
   });
 
@@ -96,10 +127,9 @@ program
   .action(async (opts) => {
     const api = getApi();
     const contextText = opts.context || resolveContextText();
-    if (!contextText) {
-      throw new Error("Context text missing. Set PFT_CONTEXT_TEXT or pass --context.");
-    }
-    const response = await api.sendChat(opts.content, contextText);
+    const content = requireNonEmpty(opts.content, "content");
+    const context = requireNonEmpty(contextText, "context");
+    const response = await api.sendChat(content, context);
     await printJson(response as JsonValue);
   });
 
@@ -122,10 +152,19 @@ program
     if (!seed) throw new Error("PFT_WALLET_SEED is required for signing.");
 
     const accountSummary = await api.getAccountSummary();
-    const pubkey = (accountSummary as any)?.tasknode_encryption_pubkey;
+    const pubkey = (accountSummary as { tasknode_encryption_pubkey?: string })?.tasknode_encryption_pubkey;
+    if (!pubkey) {
+      throw new Error("Account summary missing tasknode_encryption_pubkey.");
+    }
 
     if (!opts.content && !opts.file && !opts.artifactJson) {
       throw new Error("Provide --content, --file, or --artifact-json for evidence.");
+    }
+    if (opts.content) {
+      requireNonEmpty(opts.content, "content");
+    }
+    if (opts.artifactJson) {
+      requireNonEmpty(opts.artifactJson, "artifactJson");
     }
 
     const upload = await api.uploadEvidence(opts.taskId, {
@@ -136,8 +175,9 @@ program
       x25519Pubkey: pubkey,
     });
 
-    const evidenceId = (upload as any)?.evidence_id || (upload as any)?.evidenceId;
-    const cid = (upload as any)?.cid;
+    const uploadData = upload as { cid?: string; evidence_id?: string; evidenceId?: string };
+    const evidenceId = uploadData.evidence_id || uploadData.evidenceId;
+    const cid = uploadData.cid;
     if (!cid || !evidenceId) {
       throw new Error("Evidence upload missing cid or evidence_id.");
     }
@@ -146,15 +186,15 @@ program
       cid,
       task_id: opts.taskId,
       kind: opts.kind,
-      schema: Number(opts.schema),
-      flags: Number(opts.flags),
+      schema: parseNumberOption(opts.schema, "schema"),
+      flags: parseNumberOption(opts.flags, "flags"),
     });
 
-    const txJson = (pointer as any)?.tx_json;
+    const txJson = (pointer as { tx_json?: unknown })?.tx_json;
     if (!txJson) throw new Error("Pointer prepare missing tx_json.");
 
     const signer = new TransactionSigner(seed, opts.nodeUrl);
-    const txHash = await signer.signAndSubmit(txJson);
+    const txHash = await signer.signAndSubmit(requirePayment(txJson));
 
     const submit = await api.submitEvidence(opts.taskId, {
       cid,
@@ -182,9 +222,11 @@ program
     const seed = process.env.PFT_WALLET_SEED;
     if (!seed) throw new Error("PFT_WALLET_SEED is required for signing.");
 
-    const respond = await api.respondVerification(opts.taskId, opts.type, opts.response);
-    const evidenceId = (respond as any)?.evidence?.evidence_id || (respond as any)?.evidence?.id;
-    const cid = (respond as any)?.evidence?.cid;
+    const responseText = requireNonEmpty(opts.response, "response");
+    const respond = await api.respondVerification(opts.taskId, opts.type, responseText);
+    const evidence = (respond as { evidence?: { cid?: string; evidence_id?: string; id?: string } })?.evidence;
+    const evidenceId = evidence?.evidence_id || evidence?.id;
+    const cid = evidence?.cid;
     if (!cid || !evidenceId) {
       throw new Error("Verification response missing cid or evidence_id.");
     }
@@ -193,15 +235,15 @@ program
       cid,
       task_id: opts.taskId,
       kind: opts.kind,
-      schema: Number(opts.schema),
-      flags: Number(opts.flags),
+      schema: parseNumberOption(opts.schema, "schema"),
+      flags: parseNumberOption(opts.flags, "flags"),
     });
 
-    const txJson = (pointer as any)?.tx_json;
+    const txJson = (pointer as { tx_json?: unknown })?.tx_json;
     if (!txJson) throw new Error("Pointer prepare missing tx_json.");
 
     const signer = new TransactionSigner(seed, opts.nodeUrl);
-    const txHash = await signer.signAndSubmit(txJson);
+    const txHash = await signer.signAndSubmit(requirePayment(txJson));
 
     const submit = await api.submitVerification(opts.taskId, {
       cid,
@@ -221,17 +263,28 @@ program
   .option("--interval <seconds>", "Poll interval (seconds)", "15")
   .action(async (taskId, opts) => {
     const api = getApi();
-    const intervalMs = Number(opts.interval) * 1000;
+    const intervalMs = parseNumberOption(opts.interval, "interval", 1) * 1000;
+    let errorCount = 0;
     // eslint-disable-next-line no-constant-condition
     while (true) {
-      const task = await api.getTask(taskId);
-      const status = (task as any)?.task?.status;
-      process.stdout.write(`[${new Date().toISOString()}] status=${status}\n`);
-      if (status === "rewarded" || status === "refused" || status === "cancelled") {
-        await printJson(task as JsonValue);
-        break;
+      try {
+        const task = await api.getTask(taskId);
+        const status = (task as { task?: { status?: string } })?.task?.status;
+        process.stdout.write(`[${new Date().toISOString()}] status=${status ?? "unknown"}\n`);
+        if (status === "rewarded" || status === "refused" || status === "cancelled") {
+          await printJson(task as JsonValue);
+          break;
+        }
+        errorCount = 0;
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      } catch (err) {
+        errorCount += 1;
+        process.stderr.write(`watch error (${errorCount}/5): ${String(err)}\n`);
+        if (errorCount >= 5) {
+          throw err;
+        }
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
       }
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
   });
 
