@@ -40,7 +40,10 @@ export function loadConfig(): CliConfig {
     const raw = fs.readFileSync(CONFIG_PATH, "utf8");
     return normalizeConfig(JSON.parse(raw));
   } catch (err) {
-    process.stderr.write(`Warning: unable to load config: ${String(err)}\n`);
+    // Only warn for errors other than missing file (expected on first use)
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      process.stderr.write(`Warning: unable to load config: ${String(err)}\n`);
+    }
     return {};
   }
 }

@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { requireNonEmpty } from "./utils.js";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -10,13 +11,6 @@ export type EvidenceUploadOptions = {
   filePath?: string;
   x25519Pubkey?: string;
 };
-
-function requireNonEmpty(value: string | undefined, label: string): string {
-  if (!value || value.trim().length === 0) {
-    throw new Error(`${label} is required`);
-  }
-  return value;
-}
 
 function ensureWebApis() {
   if (typeof fetch !== "function") {
@@ -115,10 +109,6 @@ export class TaskNodeApi {
 
   async acceptTask(taskId: string) {
     return this.requestJson("POST", `/api/tasks/${taskId}/accept`);
-  }
-
-  async listChat(limit = 10) {
-    return this.requestJson("GET", `/api/chat/messages?limit=${limit}`);
   }
 
   async sendChat(content: string, contextText: string, chatType = "chat") {

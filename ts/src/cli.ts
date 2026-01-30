@@ -4,24 +4,10 @@ import type { Payment } from "xrpl";
 import { resolveBaseUrl, resolveContextText, resolveJwt, resolveTimeoutMs, setConfigValue } from "./config.js";
 import { TaskNodeApi } from "./tasknode_api.js";
 import { TransactionSigner } from "./index.js";
+import { requireNonEmpty, parseNumberOption } from "./utils.js";
 
 type JsonValue = Record<string, unknown>;
 const TASK_STATUSES = ["outstanding", "pending", "rewarded", "refused", "cancelled"] as const;
-
-function requireNonEmpty(value: string | undefined, label: string): string {
-  if (!value || value.trim().length === 0) {
-    throw new Error(`${label} is required`);
-  }
-  return value.trim();
-}
-
-function parseNumberOption(value: string, label: string, min = 0): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < min) {
-    throw new Error(`${label} must be a number >= ${min}`);
-  }
-  return parsed;
-}
 
 function requirePayment(txJson: unknown): Payment {
   if (!txJson || typeof txJson !== "object") {
