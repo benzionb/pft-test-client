@@ -13,6 +13,39 @@ cd ts
 npm install
 ```
 
+## Requirements
+- Node.js 18+ (for `fetch`, `FormData`, and `Blob`)
+
+## CLI
+```bash
+# Build
+npm run build
+
+# Optional: type-check tests
+npm run build:test
+
+# Save JWT
+node dist/cli.js auth:set-token "<jwt>"
+
+# List tasks
+node dist/cli.js tasks:summary
+
+# Submit evidence end-to-end
+PFT_WALLET_SEED="<seed>" node dist/cli.js evidence:submit \
+  --task-id "<task-id>" \
+  --type url \
+  --content "https://example.com"
+
+# Configure request timeout (milliseconds)
+PFT_TASKNODE_TIMEOUT_MS=45000 node dist/cli.js tasks:summary
+
+# Respond to verification
+PFT_WALLET_SEED="<seed>" node dist/cli.js verify:respond \
+  --task-id "<task-id>" \
+  --type text \
+  --response "My verification response"
+```
+
 ## Example
 ```ts
 import { PFTClient } from "./src/client.js";

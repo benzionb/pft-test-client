@@ -17,10 +17,11 @@ export async function pinToIPFSWeb3Storage(
     validateNonEmptyBytes(payload);
     if (!apiToken) throw new IPFSPinningError("web3.storage apiToken is required");
     const sha256 = hashPayload(payload);
+    const body = Buffer.from(payload);
     const response = await fetch(uploadUrl, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiToken}` },
-      body: payload,
+      body: body,
     });
 
     if (!response.ok) {
