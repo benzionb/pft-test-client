@@ -26,7 +26,14 @@ function createSigner(nodeUrl?: string) {
   const seed = process.env.PFT_WALLET_SEED;
   const mnemonic = process.env.PFT_WALLET_MNEMONIC;
   if (!seed && !mnemonic) {
-    throw new Error("PFT_WALLET_SEED or PFT_WALLET_MNEMONIC is required for signing.");
+    throw new Error(
+      "Missing wallet credentials.\n\n" +
+      "To fix this, either:\n" +
+      "  1. Run the setup wizard:  npm run setup\n" +
+      "  2. Set environment variable:  export PFT_WALLET_MNEMONIC=\"your 24-word phrase\"\n" +
+      "  3. Or use wallet seed:  export PFT_WALLET_SEED=\"sXXX...\"\n\n" +
+      "Get your mnemonic from the Post Fiat app: Settings → Export Seed"
+    );
   }
   return new TransactionSigner({ seed, mnemonic, nodeUrl });
 }
@@ -34,7 +41,15 @@ function createSigner(nodeUrl?: string) {
 function requireJwt(): string {
   const jwt = resolveJwt();
   if (!jwt) {
-    throw new Error("JWT missing. Set PFT_TASKNODE_JWT or run: pft-cli auth:set-token <jwt>");
+    throw new Error(
+      "Missing JWT token.\n\n" +
+      "To fix this, either:\n" +
+      "  1. Run the setup wizard:  npm run setup\n" +
+      "  2. Save token to config:  npx pft-cli auth:set-token \"<jwt>\"\n" +
+      "  3. Set environment variable:  export PFT_TASKNODE_JWT=\"<jwt>\"\n\n" +
+      "Get your JWT from https://tasknode.postfiat.org:\n" +
+      "  → Open DevTools (F12) → Network tab → Copy Authorization header"
+    );
   }
   return jwt;
 }
@@ -701,6 +716,8 @@ program
   });
 
 program.parseAsync(process.argv).catch((err) => {
-  process.stderr.write(`${String(err)}\n`);
+  const message = err instanceof Error ? err.message : String(err);
+  // Format error with clear visual separation
+  process.stderr.write(`\n\x1b[31m✗ Error:\x1b[0m ${message}\n\n`);
   process.exit(1);
 });
