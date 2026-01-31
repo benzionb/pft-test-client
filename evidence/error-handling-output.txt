@@ -1,0 +1,33 @@
+PFT-CLI Error Handling Demonstration
+=====================================
+
+Test 1: Missing JWT Token
+-------------------------
+$ npx pft-cli auth:status  (with no JWT configured)
+
+✗ Error: Missing JWT token.
+
+To fix this, either:
+  1. Run the setup wizard:  npm run setup
+  2. Save token to config:  npx pft-cli auth:set-token "<jwt>"
+  3. Set environment variable:  export PFT_TASKNODE_JWT="<jwt>"
+
+Get your JWT from https://tasknode.postfiat.org:
+  → Open DevTools (F12) → Network tab → Copy Authorization header
+
+
+Test 2: Missing Wallet Credentials  
+-----------------------------------
+$ npx pft-cli evidence:submit --task-id test --type text --content "test"  (with no wallet configured)
+
+✗ Error: Missing wallet credentials.
+
+To fix this, either:
+  1. Run the setup wizard:  npm run setup
+  2. Set environment variable:  export PFT_WALLET_MNEMONIC="your 24-word phrase"
+  3. Or use wallet seed:  export PFT_WALLET_SEED="sXXX..."
+
+Get your mnemonic from the Post Fiat app: Settings → Export Seed
+
+
+Commit: https://github.com/benzionb/pft-test-client/commit/7f82d1e
