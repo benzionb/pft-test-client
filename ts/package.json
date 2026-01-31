@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "test:e2e": "vitest run test/e2e_task_loop.test.ts --timeout 600000",
     "test:e2e:watch": "vitest test/e2e_task_loop.test.ts --timeout 600000",
+    "setup": "npx tsx scripts/setup.ts",
     "prepublishOnly": "npm run build"
   },
   "bin": {
