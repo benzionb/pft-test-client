@@ -11,6 +11,20 @@ import { savePending, loadPending, clearPending, listPending, type PendingSubmis
 type JsonValue = Record<string, unknown>;
 const TASK_STATUSES = ["outstanding", "pending", "rewarded", "refused", "cancelled"] as const;
 
+// Global quiet mode flag - suppresses stderr progress messages
+let quietMode = false;
+
+/**
+ * Log to stderr only if not in quiet mode.
+ * Use this for progress messages, status updates, and informational output.
+ * Critical errors should still use process.stderr.write directly.
+ */
+function log(message: string) {
+  if (!quietMode) {
+    process.stderr.write(message);
+  }
+}
+
 function requirePayment(txJson: unknown): Payment {
   if (!txJson || typeof txJson !== "object") {
     throw new Error("Pointer tx_json is not an object.");
@@ -64,7 +78,17 @@ function printJson(value: JsonValue) {
 }
 
 const program = new Command();
-program.name("pft-cli").description("Programmatic CLI for Post Fiat Task Node").version("0.1.0");
+program
+  .name("pft-cli")
+  .description("Programmatic CLI for Post Fiat Task Node")
+  .version("0.1.0")
+  .option("-q, --quiet", "Suppress progress messages, output only JSON to stdout")
+  .hook("preAction", (thisCommand) => {
+    const opts = thisCommand.opts();
+    if (opts.quiet) {
+      quietMode = true;
+    }
+  });
 
 // Auth
 program
@@ -146,7 +170,7 @@ program
     
     if (opts.wait) {
       const timeoutMs = parseNumberOption(opts.timeout, "timeout", 1000);
-      process.stderr.write("Sending message and waiting for response...\n");
+      log("Sending message and waiting for response...\n");
       const { userMessage, assistantMessage } = await api.sendChatAndWait(content, context, "chat", timeoutMs);
       
       if (assistantMessage) {
@@ -176,16 +200,16 @@ program
             status: taskProposal.status,
             steps: taskProposal.steps?.length || 0,
           };
-          process.stderr.write(`\n*** TASK PROPOSAL DETECTED ***\n`);
-          process.stderr.write(`Task ID: ${taskProposal.id}\n`);
-          process.stderr.write(`Title: ${taskProposal.title}\n`);
-          process.stderr.write(`PFT Offer: ${taskProposal.pft_offer}\n`);
-          process.stderr.write(`\nTo accept: pft-cli tasks:accept ${taskProposal.id}\n\n`);
+          log(`\n*** TASK PROPOSAL DETECTED ***\n`);
+          log(`Task ID: ${taskProposal.id}\n`);
+          log(`Title: ${taskProposal.title}\n`);
+          log(`PFT Offer: ${taskProposal.pft_offer}\n`);
+          log(`\nTo accept: pft-cli tasks:accept ${taskProposal.id}\n\n`);
         }
         
         printJson(result);
       } else {
-        process.stderr.write("Timeout: No assistant response received.\n");
+        log("Timeout: No assistant response received.\n");
         printJson({ user_message: userMessage, assistant_response: null } as JsonValue);
       }
     } else {
@@ -232,16 +256,16 @@ program
       
       const isPending = !actualStatus || actualStatus === "pending";
       
-      process.stderr.write(isPending 
+      log(isPending 
         ? `\n*** PENDING TASK PROPOSAL ***\n`
         : `\n*** TASK ALREADY ACCEPTED ***\n`);
-      process.stderr.write(`Task ID: ${task.id}\n`);
-      process.stderr.write(`Title: ${task.title}\n`);
-      process.stderr.write(`PFT Offer: ${task.pft_offer}\n`);
-      process.stderr.write(`Status: ${actualStatus || task.status}\n`);
+      log(`Task ID: ${task.id}\n`);
+      log(`Title: ${task.title}\n`);
+      log(`PFT Offer: ${task.pft_offer}\n`);
+      log(`Status: ${actualStatus || task.status}\n`);
       
       if (isPending) {
-        process.stderr.write(`\nTo accept: pft-cli tasks:accept ${task.id}\n\n`);
+        log(`\nTo accept: pft-cli tasks:accept ${task.id}\n\n`);
       }
       
       printJson({
@@ -254,7 +278,7 @@ program
         can_accept: isPending,
       } as JsonValue);
     } else {
-      process.stderr.write("No pending task proposals found in recent chat history.\n");
+      log("No pending task proposals found in recent chat history.\n");
       printJson({ task_proposal: null } as JsonValue);
     }
   });
@@ -361,9 +385,9 @@ program
     // Check for existing pending submission first
     const existingPending = loadPending(opts.taskId, "verification_response");
     if (existingPending) {
-      process.stderr.write(`Found pending verification response for task ${opts.taskId}.\n`);
-      process.stderr.write(`Use 'pending:resume --task-id ${opts.taskId} --type verification_response' to complete it.\n`);
-      process.stderr.write(`Or 'pending:clear --task-id ${opts.taskId} --type verification_response' to start fresh.\n`);
+      log(`Found pending verification response for task ${opts.taskId}.\n`);
+      log(`Use 'pending:resume --task-id ${opts.taskId} --type verification_response' to complete it.\n`);
+      log(`Or 'pending:clear --task-id ${opts.taskId} --type verification_response' to start fresh.\n`);
       throw new Error("Pending verification response exists. Resume or clear it first.");
     }
 
@@ -399,7 +423,7 @@ program
       artifact_type: opts.type,
       created_at: new Date().toISOString(),
     });
-    process.stderr.write(`Saved pending verification response (CID: ${cid.slice(0, 20)}...)\n`);
+    log(`Saved pending verification response (CID: ${cid.slice(0, 20)}...)\n`);
 
     const pointer = await api.preparePointer({
       cid,
@@ -451,7 +475,7 @@ program
         await new Promise((resolve) => setTimeout(resolve, intervalMs));
       } catch (err) {
         errorCount += 1;
-        process.stderr.write(`watch error (${errorCount}/5): ${String(err)}\n`);
+        log(`watch error (${errorCount}/5): ${String(err)}\n`);
         if (errorCount >= 5) {
           throw err;
         }
@@ -467,7 +491,7 @@ program
   .action(() => {
     const pending = listPending();
     if (pending.length === 0) {
-      process.stderr.write("No pending submissions.\n");
+      log("No pending submissions.\n");
       printJson({ pending: [] });
     } else {
       printJson({ pending } as JsonValue);
@@ -491,10 +515,10 @@ program
       throw new Error(`No pending ${submissionType} submission found for task ${opts.taskId}`);
     }
 
-    process.stderr.write(`Found pending submission:\n`);
-    process.stderr.write(`  CID: ${pending.cid}\n`);
-    process.stderr.write(`  Evidence ID: ${pending.evidence_id}\n`);
-    process.stderr.write(`  Created: ${pending.created_at}\n\n`);
+    log(`Found pending submission:\n`);
+    log(`  CID: ${pending.cid}\n`);
+    log(`  Evidence ID: ${pending.evidence_id}\n`);
+    log(`  Created: ${pending.created_at}\n\n`);
 
     const api = getApi();
     const signer = createSigner(opts.nodeUrl);
@@ -549,7 +573,7 @@ program
       throw new Error("--type must be 'evidence' or 'verification_response'");
     }
     clearPending(opts.taskId, submissionType);
-    process.stderr.write(`Cleared pending ${submissionType} for task ${opts.taskId}\n`);
+    log(`Cleared pending ${submissionType} for task ${opts.taskId}\n`);
   });
 
 // Verification utilities
@@ -574,7 +598,7 @@ program
     const timeoutMs = parseNumberOption(opts.timeout, "timeout", 1) * 1000;
     const intervalMs = parseNumberOption(opts.interval, "interval", 1) * 1000;
 
-    process.stderr.write(`Waiting for verification question (timeout: ${opts.timeout}s)...\n`);
+    log(`Waiting for verification question (timeout: ${opts.timeout}s)...\n`);
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeoutMs) {
@@ -583,14 +607,14 @@ program
       const verStatus = status.submission?.verification_status;
 
       if (ask && ask.length > 0 && verStatus === "awaiting_response") {
-        process.stderr.write(`\n*** VERIFICATION QUESTION ***\n`);
-        process.stderr.write(`${ask}\n\n`);
+        log(`\n*** VERIFICATION QUESTION ***\n`);
+        log(`${ask}\n\n`);
         printJson({ verification_ask: ask, verification_status: verStatus } as JsonValue);
         return;
       }
 
       const elapsed = Math.round((Date.now() - startTime) / 1000);
-      process.stderr.write(`[${elapsed}s] status: ${verStatus}\n`);
+      log(`[${elapsed}s] status: ${verStatus}\n`);
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
 
@@ -611,7 +635,7 @@ program
     const runner = new TaskLoopRunner(api, signer, {
       verbose: true,
       onStatusChange: (status, taskId) => {
-        process.stderr.write(`[STATUS] ${taskId}: ${status}\n`);
+        log(`[STATUS] ${taskId}: ${status}\n`);
       },
     });
 
@@ -619,17 +643,17 @@ program
     const description = "[E2E TEST - 1 PFT ONLY] Automated infrastructure test. Echo the task ID to verify the loop works. Please reward only 1 PFT, absolute minimum value.";
     const context = "Automated E2E test of pft-test-client CLI. This is infrastructure validation only - please use minimum reward (1 PFT).";
 
-    process.stderr.write(`\n=== STARTING E2E TEST LOOP ===\n`);
-    process.stderr.write(`Type: ${taskType}\n\n`);
+    log(`\n=== STARTING E2E TEST LOOP ===\n`);
+    log(`Type: ${taskType}\n\n`);
 
     try {
       const result = await runner.runFullLoop(
         { type: taskType, description, context },
         // Evidence callback - receives task so we can provide exactly what's required
         (task) => {
-          process.stderr.write(`[TaskLoop] Task ID: ${task.id}\n`);
-          process.stderr.write(`[TaskLoop] Verification type: ${task.verification.type}\n`);
-          process.stderr.write(`[TaskLoop] Verification criteria: ${task.verification.criteria}\n`);
+          log(`[TaskLoop] Task ID: ${task.id}\n`);
+          log(`[TaskLoop] Verification type: ${task.verification.type}\n`);
+          log(`[TaskLoop] Verification criteria: ${task.verification.criteria}\n`);
           
           // Build evidence that directly addresses the verification criteria
           const evidenceContent = [
@@ -646,9 +670,9 @@ program
         },
         // Verification response callback - receives question AND task
         (question, task) => {
-          process.stderr.write(`\n*** AUTO-RESPONDING TO VERIFICATION ***\n`);
-          process.stderr.write(`Question: ${question}\n`);
-          process.stderr.write(`Original criteria: ${task.verification.criteria}\n`);
+          log(`\n*** AUTO-RESPONDING TO VERIFICATION ***\n`);
+          log(`Question: ${question}\n`);
+          log(`Original criteria: ${task.verification.criteria}\n`);
           
           // Build response that directly answers the verification question
           const response = [
@@ -663,14 +687,14 @@ program
         }
       );
 
-      process.stderr.write(`\n=== E2E TEST COMPLETE ===\n`);
-      process.stderr.write(`Status: ${result.status}\n`);
+      log(`\n=== E2E TEST COMPLETE ===\n`);
+      log(`Status: ${result.status}\n`);
       if (result.status === "rewarded") {
-        process.stderr.write(`Reward: ${result.pft} PFT (${result.rewardTier})\n`);
+        log(`Reward: ${result.pft} PFT (${result.rewardTier})\n`);
       }
       printJson(result as JsonValue);
     } catch (err) {
-      process.stderr.write(`\n=== E2E TEST FAILED ===\n`);
+      log(`\n=== E2E TEST FAILED ===\n`);
       throw err;
     }
   });
@@ -692,7 +716,7 @@ program
     const runner = new TaskLoopRunner(api, signer, {
       verbose: true,
       onStatusChange: (status, taskId) => {
-        process.stderr.write(`[STATUS] ${taskId}: ${status}\n`);
+        log(`[STATUS] ${taskId}: ${status}\n`);
       },
     });
 
@@ -701,9 +725,9 @@ program
       throw new Error("--type must be personal, network, or alpha");
     }
 
-    process.stderr.write(`\n=== STARTING TASK LOOP ===\n`);
-    process.stderr.write(`Type: ${taskType}\n`);
-    process.stderr.write(`Description: ${opts.description.slice(0, 60)}...\n\n`);
+    log(`\n=== STARTING TASK LOOP ===\n`);
+    log(`Type: ${taskType}\n`);
+    log(`Description: ${opts.description.slice(0, 60)}...\n\n`);
 
     const result = await runner.runFullLoop(
       { type: taskType, description: opts.description, context: opts.context },
@@ -711,7 +735,7 @@ program
       opts.verificationResponse
     );
 
-    process.stderr.write(`\n=== TASK LOOP COMPLETE ===\n`);
+    log(`\n=== TASK LOOP COMPLETE ===\n`);
     printJson(result as JsonValue);
   });
 
