@@ -1,0 +1,34 @@
+PFT-CLI --quiet Flag Demonstration
+===================================
+
+Command: npx pft-cli chat:pending-task
+
+=== NORMAL MODE (shows progress on stderr) ===
+$ npx pft-cli chat:pending-task
+
+*** TASK ALREADY ACCEPTED ***
+Task ID: 6d5e06ce-7ac3-4dd0-94b5-65a5a6ab8f45
+Title: Implement Quiet Flag for Machine-Readable CLI Output
+PFT Offer: 1200
+Status: in_progress
+{
+  "task_id": "6d5e06ce-7ac3-4dd0-94b5-65a5a6ab8f45",
+  "title": "Implement Quiet Flag for Machine-Readable CLI Output",
+  ...
+}
+
+
+=== QUIET MODE (clean JSON only) ===
+$ npx pft-cli --quiet chat:pending-task
+
+{
+  "task_id": "6d5e06ce-7ac3-4dd0-94b5-65a5a6ab8f45",
+  "title": "Implement Quiet Flag for Machine-Readable CLI Output",
+  ...
+}
+
+
+Implementation: https://github.com/benzionb/pft-test-client/commit/bee7f1f
+
+The --quiet flag suppresses all stderr progress messages (*** TASK ALREADY ACCEPTED ***,
+Task ID, Title, etc.), outputting ONLY the final JSON payload to stdout.
