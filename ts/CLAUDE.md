@@ -23,7 +23,7 @@ The PFT CLI (`pft-cli`) is a programmatic interface to the [Post Fiat Task Node]
 ### Installation
 
 ```bash
-cd /Users/zion_1/Projects/pft-test-client/ts
+cd ts
 npm install && npm run build
 ```
 
@@ -505,5 +505,5 @@ console.log(result.pft);    // "1000" (PFT reward)
 
 - **Task Node**: https://tasknode.postfiat.org
 - **XRPL Testnet**: wss://rpc.testnet.postfiat.org:6008
-- **Protocol Spec**: `/Users/zion_1/Projects/pft-test-client/docs/TASK_LOOP_PROTOCOL.md`
-- **README**: `/Users/zion_1/Projects/pft-test-client/ts/README.md`
+- **Protocol Spec**: `docs/TASK_LOOP_PROTOCOL.md`
+- **README**: `ts/README.md`

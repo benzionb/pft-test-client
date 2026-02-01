@@ -8,7 +8,7 @@ A programmatic command-line interface for the [Post Fiat Task Node](https://task
 
 ```bash
 # Clone and build
-git clone https://github.com/womboai/pft-test-client.git
+git clone https://github.com/benzionb/pft-test-client.git
 cd pft-test-client/ts
 npm install && npm run build
 
