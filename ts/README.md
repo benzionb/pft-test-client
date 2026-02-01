@@ -2,7 +2,7 @@
 
 A programmatic command-line interface for the [Post Fiat Task Node](https://tasknode.postfiat.org). Enables automated task discovery, acceptance, evidence submission, and verification handling.
 
-> **For AI Agents:** See [CLAUDE.md](./CLAUDE.md) for comprehensive agent documentation.
+> **For AI Agents:** See [CLAUDE.md](../CLAUDE.md) for comprehensive agent documentation.
 
 ## Quick Start (Beta Testers)
 

@@ -90,17 +90,9 @@ pft-test-client/
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Related Resources (Local)
+## For AI Agents
 
-If working in the `/Users/zion_1/Projects/` workspace:
-
-| Resource | Location | Purpose |
-|----------|----------|---------|
-| **Context File** | `agent_integrations/pft_tasknode/CONTEXT.md` | Quick pickup guide with credentials |
-| **System Prompts** | `agent_integrations/pft_tasknode/prompts/` | Leaked Task Node prompts |
-| **Traffic Captures** | `agent_integrations/pft_tasknode/captures/` | HAR files for reference |
-| **Chain Monitor** | `agent_integrations/pft_monitor/` | Blockchain scanning tools |
-| **Research Docs** | `Vault/3.1 decentralized ai research/1. Priority/PFT/` | Deep dives, knowledge base |
+See [CLAUDE.md](CLAUDE.md) for AI-specific documentation and quick setup instructions.
 
 ## License
 
