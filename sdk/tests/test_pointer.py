@@ -1,6 +1,6 @@
 import binascii
 
-from agent_integrations.pft_tasknode.sdk.pointer import encode_pointer_memo
+from sdk.pointer import encode_pointer_memo
 
 
 def test_encode_pointer_memo_bytes():

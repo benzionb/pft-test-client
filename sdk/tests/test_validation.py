@@ -1,6 +1,6 @@
 import pytest
 
-from agent_integrations.pft_tasknode.sdk.validation import (
+from sdk.validation import (
     validate_cid,
     validate_non_negative_int,
     validate_nonempty_content,

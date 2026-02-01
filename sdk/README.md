@@ -27,7 +27,7 @@ Override these defaults in your own integration.
 
 ## Quick usage
 ```python
-from agent_integrations.pft_tasknode.sdk import PFTClient
+from sdk import PFTClient
 
 client = PFTClient(wallet_seed="YOUR_SEED")
 cid, tx = await client.pin_and_build_pointer(b"hello world")
