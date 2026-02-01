@@ -1,12 +1,15 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { encryptMnemonic, decryptMnemonic } from "./crypto.js";
 
 export type CliConfig = {
   jwt?: string;
   baseUrl?: string;
   contextText?: string;
   timeoutMs?: number;
+  mnemonic?: string;
+  mnemonicEncrypted?: boolean;
 };
 
 const CONFIG_DIR = path.join(os.homedir(), ".pft-tasknode");
@@ -32,6 +35,12 @@ function normalizeConfig(raw: unknown): CliConfig {
   }
   const timeoutMs = normalizeTimeout(obj.timeoutMs);
   if (timeoutMs) config.timeoutMs = timeoutMs;
+  if (typeof obj.mnemonic === "string" && obj.mnemonic.length > 0) {
+    config.mnemonic = obj.mnemonic;
+  }
+  if (typeof obj.mnemonicEncrypted === "boolean") {
+    config.mnemonicEncrypted = obj.mnemonicEncrypted;
+  }
   return config;
 }
 
@@ -81,4 +90,82 @@ export function resolveTimeoutMs(): number {
   const parsed = normalizeTimeout(fromEnv);
   if (parsed) return parsed;
   return loadConfig().timeoutMs || 30000;
+}
+
+/**
+ * Store mnemonic in config file.
+ * If password provided, encrypt the mnemonic before storing.
+ * If no password, store plaintext.
+ */
+export function setMnemonic(mnemonic: string, password?: string): void {
+  const current = loadConfig();
+  if (password) {
+    current.mnemonic = encryptMnemonic(mnemonic, password);
+    current.mnemonicEncrypted = true;
+  } else {
+    current.mnemonic = mnemonic;
+    current.mnemonicEncrypted = false;
+  }
+  saveConfig(current);
+}
+
+/**
+ * Resolve mnemonic from env var or config file.
+ * Checks PFT_WALLET_MNEMONIC env var first, then config file.
+ * If config mnemonic is encrypted, password is required to decrypt.
+ * Returns undefined if not found or decryption fails.
+ */
+export function resolveMnemonic(password?: string): string | undefined {
+  // Check env var first
+  const fromEnv = process.env.PFT_WALLET_MNEMONIC;
+  if (fromEnv && fromEnv.trim().length > 0) {
+    return fromEnv.trim();
+  }
+
+  // Check config file
+  const config = loadConfig();
+  if (!config.mnemonic) {
+    return undefined;
+  }
+
+  // If encrypted, require password to decrypt
+  if (config.mnemonicEncrypted) {
+    if (!password) {
+      return undefined;
+    }
+    try {
+      return decryptMnemonic(config.mnemonic, password);
+    } catch {
+      return undefined;
+    }
+  }
+
+  // Return plaintext mnemonic
+  return config.mnemonic;
+}
+
+/**
+ * Check if mnemonic exists (in env var or config file).
+ */
+export function hasMnemonic(): boolean {
+  const fromEnv = process.env.PFT_WALLET_MNEMONIC;
+  if (fromEnv && fromEnv.trim().length > 0) {
+    return true;
+  }
+  const config = loadConfig();
+  return typeof config.mnemonic === "string" && config.mnemonic.length > 0;
+}
+
+/**
+ * Check if the stored mnemonic (in config file) is encrypted.
+ * Returns false if mnemonic is from env var or not encrypted.
+ */
+export function isMnemonicEncrypted(): boolean {
+  // Env var mnemonic is never encrypted
+  const fromEnv = process.env.PFT_WALLET_MNEMONIC;
+  if (fromEnv && fromEnv.trim().length > 0) {
+    return false;
+  }
+  const config = loadConfig();
+  return config.mnemonicEncrypted === true;
 }

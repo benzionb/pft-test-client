@@ -2,11 +2,13 @@
 import { Command } from "commander";
 import type { Payment } from "xrpl";
 import { randomUUID } from "node:crypto";
-import { resolveBaseUrl, resolveContextText, resolveJwt, resolveTimeoutMs, setConfigValue } from "./config.js";
+import readline from "node:readline";
+import { resolveBaseUrl, resolveContextText, resolveJwt, resolveTimeoutMs, setConfigValue, loadConfig, saveConfig } from "./config.js";
 import { TaskNodeApi } from "./tasknode_api.js";
 import { TransactionSigner } from "./index.js";
 import { requireNonEmpty, parseNumberOption } from "./utils.js";
 import { savePending, loadPending, clearPending, listPending, type PendingSubmission } from "./pending.js";
+import { encryptMnemonic } from "./crypto.js";
 
 type JsonValue = Record<string, unknown>;
 const TASK_STATUSES = ["outstanding", "pending", "rewarded", "refused", "cancelled"] as const;
@@ -107,6 +109,171 @@ program
   .action((jwt) => {
     setConfigValue("jwt", jwt);
     process.stdout.write("JWT saved.\n");
+  });
+
+program
+  .command("auth:setup")
+  .description("Interactive setup wizard for credentials")
+  .action(async () => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    // Handle Ctrl+C gracefully
+    rl.on("close", () => {
+      process.stdout.write("\n\nSetup cancelled.\n");
+      process.exit(0);
+    });
+
+    const prompt = (question: string): Promise<string> => {
+      return new Promise((resolve) => {
+        rl.question(question, (answer) => {
+          resolve(answer);
+        });
+      });
+    };
+
+    try {
+      // Welcome message
+      process.stdout.write("\n");
+      process.stdout.write("=".repeat(50) + "\n");
+      process.stdout.write("         Post Fiat CLI Setup\n");
+      process.stdout.write("=".repeat(50) + "\n\n");
+      process.stdout.write("This wizard will configure your credentials.\n");
+      process.stdout.write("All data is stored locally in ~/.pft-tasknode/ and NEVER transmitted.\n\n");
+
+      // Step 1: JWT Token
+      process.stdout.write("-".repeat(50) + "\n");
+      process.stdout.write("STEP 1: JWT Token\n");
+      process.stdout.write("-".repeat(50) + "\n\n");
+      process.stdout.write("How to get your JWT token:\n");
+      process.stdout.write("  1. Open https://tasknode.postfiat.org\n");
+      process.stdout.write("  2. Open DevTools (F12)\n");
+      process.stdout.write("  3. Go to Network tab\n");
+      process.stdout.write("  4. Find any API request\n");
+      process.stdout.write("  5. Copy the Authorization header value\n\n");
+
+      let jwt = "";
+      while (!jwt.trim()) {
+        jwt = await prompt("Paste your JWT token: ");
+        if (!jwt.trim()) {
+          process.stdout.write("  Error: JWT token cannot be empty.\n");
+        }
+      }
+      jwt = jwt.trim();
+
+      // Step 2: Mnemonic
+      process.stdout.write("\n");
+      process.stdout.write("-".repeat(50) + "\n");
+      process.stdout.write("STEP 2: Wallet Mnemonic\n");
+      process.stdout.write("-".repeat(50) + "\n\n");
+      process.stdout.write("Your 24-word recovery phrase from the Post Fiat app.\n");
+      process.stdout.write("  → Settings → Export Seed\n\n");
+
+      let mnemonic = "";
+      while (true) {
+        mnemonic = await prompt("Paste your mnemonic (24 words): ");
+        mnemonic = mnemonic.trim();
+        
+        if (!mnemonic) {
+          process.stdout.write("  Error: Mnemonic cannot be empty.\n");
+          continue;
+        }
+        
+        const wordCount = mnemonic.split(/\s+/).length;
+        if (wordCount !== 24) {
+          process.stdout.write(`  Error: Expected 24 words, got ${wordCount}.\n`);
+          continue;
+        }
+        
+        break;
+      }
+
+      // Ask about encryption
+      let encryptMnemonicAnswer = "";
+      while (!["y", "n", "yes", "no"].includes(encryptMnemonicAnswer.toLowerCase())) {
+        encryptMnemonicAnswer = await prompt("\nEncrypt mnemonic with a password? (recommended) [y/n]: ");
+        if (!["y", "n", "yes", "no"].includes(encryptMnemonicAnswer.toLowerCase())) {
+          process.stdout.write("  Please enter 'y' or 'n'.\n");
+        }
+      }
+
+      let mnemonicToSave = mnemonic;
+      let isEncrypted = false;
+
+      if (["y", "yes"].includes(encryptMnemonicAnswer.toLowerCase())) {
+        let password = "";
+        let passwordConfirm = "";
+        
+        while (true) {
+          password = await prompt("Enter encryption password: ");
+          if (password.length < 8) {
+            process.stdout.write("  Error: Password must be at least 8 characters.\n");
+            continue;
+          }
+          
+          passwordConfirm = await prompt("Confirm encryption password: ");
+          if (password !== passwordConfirm) {
+            process.stdout.write("  Error: Passwords do not match.\n");
+            continue;
+          }
+          
+          break;
+        }
+
+        process.stdout.write("  Encrypting mnemonic (this may take a moment)...\n");
+        mnemonicToSave = encryptMnemonic(mnemonic, password);
+        isEncrypted = true;
+        process.stdout.write("  ✓ Mnemonic encrypted.\n");
+      }
+
+      // Save config
+      const config = loadConfig();
+      config.jwt = jwt;
+      config.mnemonic = mnemonicToSave;
+      config.mnemonicEncrypted = isEncrypted;
+      saveConfig(config);
+
+      // Step 3: Verify
+      process.stdout.write("\n");
+      process.stdout.write("-".repeat(50) + "\n");
+      process.stdout.write("STEP 3: Verifying Credentials\n");
+      process.stdout.write("-".repeat(50) + "\n\n");
+
+      try {
+        const api = new TaskNodeApi(jwt, resolveBaseUrl(), resolveTimeoutMs());
+        const summary = await api.getAccountSummary();
+        const accountSummary = summary as { account?: string; pft_balance?: number };
+        
+        process.stdout.write("  ✓ JWT token is valid!\n");
+        if (accountSummary.account) {
+          process.stdout.write(`  Account: ${accountSummary.account}\n`);
+        }
+        if (typeof accountSummary.pft_balance === "number") {
+          process.stdout.write(`  PFT Balance: ${accountSummary.pft_balance}\n`);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        process.stdout.write(`  ⚠ Warning: Could not verify JWT: ${message}\n`);
+        process.stdout.write("  Your credentials have been saved, but the JWT may be invalid or expired.\n");
+      }
+
+      // Success message
+      process.stdout.write("\n");
+      process.stdout.write("=".repeat(50) + "\n");
+      process.stdout.write("  ✓ Setup complete!\n");
+      process.stdout.write("=".repeat(50) + "\n\n");
+      process.stdout.write("Your credentials are stored in ~/.pft-tasknode/config.json\n\n");
+      process.stdout.write("Next steps:\n");
+      process.stdout.write("  pft-cli tasks:summary          # View your tasks\n");
+      process.stdout.write("  pft-cli chat:send --help       # Request new tasks\n\n");
+
+      rl.close();
+    } catch (err) {
+      rl.close();
+      throw err;
+    }
   });
 
 // Tasks

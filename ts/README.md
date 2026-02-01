@@ -1,63 +1,64 @@
 # PFT CLI Client
 
-A programmatic command-line interface for interacting with the [Post Fiat Task Node](https://tasknode.postfiat.org). This CLI enables automated task discovery, acceptance, evidence submission, and verification response handling.
+A programmatic command-line interface for the [Post Fiat Task Node](https://tasknode.postfiat.org). Enables automated task discovery, acceptance, evidence submission, and verification handling.
+
+> **For AI Agents:** See [CLAUDE.md](./CLAUDE.md) for comprehensive agent documentation.
+
+## Quick Start (Beta Testers)
+
+```bash
+# Clone and build
+git clone https://github.com/womboai/pft-test-client.git
+cd pft-test-client/ts
+npm install && npm run build
+
+# Interactive setup wizard (recommended)
+npx pft-cli auth:setup
+```
+
+The setup wizard guides you through configuring your JWT token and wallet mnemonic. All credentials are stored locally in `~/.pft-tasknode/` and **never transmitted**.
 
 ## Features
 
-- **Authentication**: JWT-based authentication with the Task Node
+- **Interactive Setup**: Guided credential configuration with optional encryption
 - **Task Management**: List, accept, and track tasks programmatically
-- **Chat Integration**: Request tasks and receive proposals via the AI chat interface
-- **Evidence Submission**: Upload evidence with IPFS pinning and on-chain transaction signing
-- **Verification Handling**: Respond to verification requests with automatic transaction submission
-- **Transaction Signing**: Built-in XRPL transaction signing via wallet seed or mnemonic
+- **Chat Integration**: Request tasks via AI chat ("magic phrases")
+- **Evidence Submission**: Upload evidence with IPFS pinning and XRPL signing
+- **Verification Handling**: Respond to verification questions automatically
+- **Transaction Signing**: Built-in XRPL signing via mnemonic or seed
+- **Pending Recovery**: Resume failed submissions
 
 ## Requirements
 
-- **Node.js 18+** (required for `fetch`, `FormData`, and `Blob` APIs)
-- A Post Fiat Task Node account with JWT token
-- (For signing) Wallet seed or 24-word mnemonic
+- **Node.js 18+** (for `fetch`, `FormData`, `Blob` APIs)
+- Post Fiat Task Node account with JWT token
+- Wallet mnemonic (24 words) for transaction signing
 
-## Installation
+## Manual Configuration
 
-```bash
-# Clone the repository
-git clone https://github.com/benzionb/pft-test-client.git
-cd pft-test-client/ts
-
-# Install dependencies
-npm install
-
-# Build
-npm run build
-```
-
-### Global Installation (Optional)
-
-```bash
-npm link
-# Now you can use `pft-cli` from anywhere
-```
-
-## Configuration
+If you prefer not to use the setup wizard:
 
 ### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `PFT_TASKNODE_JWT` | Yes | JWT token from Task Node authentication |
-| `PFT_WALLET_SEED` | For signing | XRPL wallet seed (starts with `s`) |
-| `PFT_WALLET_MNEMONIC` | For signing | 24-word recovery phrase (alternative to seed) |
-| `PFT_TASKNODE_URL` | No | Task Node API URL (default: `https://tasknode.postfiat.org`) |
+| `PFT_TASKNODE_JWT` | Yes | JWT token from Task Node |
+| `PFT_WALLET_MNEMONIC` | For signing | 24-word recovery phrase |
+| `PFT_WALLET_SEED` | For signing | XRPL wallet seed (alternative to mnemonic) |
+| `PFT_TASKNODE_URL` | No | API URL (default: `https://tasknode.postfiat.org`) |
 | `PFT_TASKNODE_CONTEXT` | No | Default context text for chat messages |
 | `PFT_TASKNODE_TIMEOUT_MS` | No | Request timeout in milliseconds (default: 30000) |
 
 ### Persistent Configuration
 
-Save settings to `~/.pft-tasknode/config.json`:
+Credentials are stored in `~/.pft-tasknode/config.json` (with 600 permissions):
 
 ```bash
-# Save JWT token
-pft-cli auth:set-token "<your-jwt-token>"
+# Interactive setup (recommended)
+npx pft-cli auth:setup
+
+# Or save JWT manually
+npx pft-cli auth:set-token "<jwt>"
 ```
 
 ## CLI Commands
