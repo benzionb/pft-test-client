@@ -69,6 +69,14 @@ export type VerificationStatus = {
     verification_responded_at: string | null;
     verification_tx_hash: string | null;
   };
+  debug?: {
+    verification_payload?: {
+      assessment?: string;
+      verification_ask?: string;
+      why_this_ask?: string;
+      value_to_user?: string;
+    };
+  };
 };
 
 function ensureWebApis() {

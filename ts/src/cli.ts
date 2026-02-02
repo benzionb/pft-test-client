@@ -632,9 +632,62 @@ program
     while (true) {
       try {
         const task = await api.getTask(taskId);
-        const status = (task as { task?: { status?: string } })?.task?.status;
+        const taskData = (task as { task?: Record<string, unknown> })?.task;
+        const status = taskData?.status as string | undefined;
         process.stdout.write(`[${new Date().toISOString()}] status=${status ?? "unknown"}\n`);
         if (status === "rewarded" || status === "refused" || status === "cancelled") {
+          // Display reward summary prominently
+          if (status === "rewarded") {
+            const pftOffer = taskData?.pft_offer_estimate || taskData?.pft_offer;
+            const pftActual = taskData?.pft_offer_actual || taskData?.pft_offer;
+            const rewardSummary = taskData?.reward_summary;
+            const title = taskData?.title;
+            
+            log(`\n${"=".repeat(50)}\n`);
+            log(`  *** TASK REWARDED ***\n`);
+            log(`${"=".repeat(50)}\n\n`);
+            log(`  Title: ${title}\n`);
+            log(`  PFT Earned: ${pftActual} PFT`);
+            if (pftOffer && pftActual && pftOffer !== pftActual) {
+              log(` (upgraded from ${pftOffer})`);
+            }
+            log(`\n`);
+            
+            if (rewardSummary) {
+              log(`\n  Reward Summary:\n`);
+              log(`  ${rewardSummary}\n`);
+            }
+            
+            // Fetch verification status for additional context
+            try {
+              const verifyStatus = await api.getVerificationStatus(taskId);
+              const verifyPayload = verifyStatus?.debug?.verification_payload;
+              if (verifyPayload) {
+                const assessment = verifyPayload.assessment;
+                const valueToUser = verifyPayload.value_to_user;
+                if (assessment) {
+                  log(`\n  Assessment: ${assessment}\n`);
+                }
+                if (valueToUser) {
+                  log(`  Feedback: ${valueToUser}\n`);
+                }
+              }
+            } catch {
+              // Ignore errors fetching verification status
+            }
+            
+            log(`\n${"=".repeat(50)}\n\n`);
+          } else if (status === "refused") {
+            const refusalReason = taskData?.refusal_reason;
+            log(`\n${"=".repeat(50)}\n`);
+            log(`  *** TASK REFUSED ***\n`);
+            log(`${"=".repeat(50)}\n\n`);
+            if (refusalReason) {
+              log(`  Reason: ${refusalReason}\n`);
+            }
+            log(`\n${"=".repeat(50)}\n\n`);
+          }
+          
           printJson(task as JsonValue);
           break;
         }
