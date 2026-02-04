@@ -519,6 +519,27 @@ const memo = encodePointerMemo(
 
 The destination address (`rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7`) is the Task Node's submission receiver.
 
+## Changelog
+
+### 2026-02-04: Reward Summary Fix
+
+**Problem:** The individual task endpoint (`/api/tasks/{id}`) does not populate reward fields (`rewardSummary`, `rewardTier`, `rewardScore`, `txHash`). These fields are only available from the summary endpoint (`/api/tasks/summary`).
+
+**Solution:** Added `getTaskRewardData(taskId)` method to `TaskNodeApi` that fetches from the summary endpoint and extracts reward data for a specific task.
+
+**Changes:**
+- `src/tasknode_api.ts`: Added `TaskRewardData` type and `getTaskRewardData()` method
+- `src/cli.ts`: Updated `tasks:watch` to display tier, score, and reward summary after task completion
+- `src/loop.ts`: Updated `watchUntilComplete()` to fetch full reward data from summary endpoint
+- `src/index.ts`: Exported `TaskRewardData` type
+
+**Usage:**
+```typescript
+const api = new TaskNodeApi(jwt);
+const rewardData = await api.getTaskRewardData("task-id");
+// Returns: { id, title, pft, rewardTier, rewardScore, rewardSummary, txHash, status }
+```
+
 ## Notes
 
 - Default endpoints point to Post Fiat testnet
