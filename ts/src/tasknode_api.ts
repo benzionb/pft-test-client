@@ -79,6 +79,42 @@ export type VerificationStatus = {
   };
 };
 
+/**
+ * Task reward data from the summary endpoint.
+ * Note: The individual task endpoint (/api/tasks/{id}) doesn't populate reward fields,
+ * but the summary endpoint (/api/tasks/summary) does.
+ */
+export type TaskRewardData = {
+  id: string;
+  title: string;
+  pft: string;
+  rewardTier: string | null;
+  rewardScore: string | null;
+  rewardSummary: string | null;
+  txHash: string | null;
+  status: string;
+};
+
+type SummaryTask = {
+  id: string;
+  title: string;
+  pft?: string;
+  rewardTier?: string;
+  rewardScore?: string;
+  rewardSummary?: string;
+  txHash?: string;
+  status?: string;
+};
+
+type TasksSummaryResponse = {
+  tasks: {
+    rewarded?: SummaryTask[];
+    refused?: SummaryTask[];
+    cancelled?: SummaryTask[];
+    [key: string]: SummaryTask[] | undefined;
+  };
+};
+
 function ensureWebApis() {
   if (typeof fetch !== "function") {
     throw new Error("Global fetch is not available. Use Node.js 18+.");
@@ -181,7 +217,39 @@ export class TaskNodeApi {
   }
 
   async getTasksSummary() {
-    return this.requestJson("GET", "/api/tasks/summary");
+    return this.requestJson<TasksSummaryResponse>("GET", "/api/tasks/summary");
+  }
+
+  /**
+   * Get task reward data from the summary endpoint.
+   * The individual task endpoint doesn't populate reward fields (rewardSummary, rewardTier, etc.),
+   * but the summary endpoint does. This method fetches from summary and finds the specific task.
+   */
+  async getTaskRewardData(taskId: string): Promise<TaskRewardData | null> {
+    const summary = await this.getTasksSummary();
+    
+    // Search across all status categories
+    const statusCategories = ["rewarded", "refused", "cancelled"] as const;
+    for (const category of statusCategories) {
+      const tasks = summary.tasks[category];
+      if (tasks) {
+        const task = tasks.find((t) => t.id === taskId);
+        if (task) {
+          return {
+            id: task.id,
+            title: task.title,
+            pft: task.pft ?? "0",
+            rewardTier: task.rewardTier ?? null,
+            rewardScore: task.rewardScore ?? null,
+            rewardSummary: task.rewardSummary ?? null,
+            txHash: task.txHash ?? null,
+            status: task.status ?? category,
+          };
+        }
+      }
+    }
+    
+    return null;
   }
 
   async getTask(taskId: string) {

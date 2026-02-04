@@ -9,6 +9,6 @@ export { pollUntil, sleep, POLL_INTERVALS, POLL_TIMEOUTS, PollingTimeoutError } 
 export * from "./validation.js";
 
 // Type exports
-export type { TaskProposal, ChatMessage, EvidenceUploadOptions, VerificationResponseResult, VerificationStatus } from "./tasknode_api.js";
+export type { TaskProposal, ChatMessage, EvidenceUploadOptions, VerificationResponseResult, VerificationStatus, TaskRewardData } from "./tasknode_api.js";
 export type { TaskType, TaskRequest, EvidenceInput, LoopOptions, FinalTask } from "./loop.js";
 export type { PollOptions } from "./polling.js";

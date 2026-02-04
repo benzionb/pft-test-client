@@ -313,6 +313,7 @@ export class TaskLoopRunner {
       throw new Error("Task not found in response");
     }
 
+    // Build initial FinalTask from individual task endpoint
     const finalTask: FinalTask = {
       id: task.id as string,
       title: task.title as string,
@@ -325,9 +326,28 @@ export class TaskLoopRunner {
       txHash: task.reward_tx_hash as string | undefined,
     };
 
+    // Fetch full reward data from summary endpoint (individual task endpoint doesn't populate reward fields)
+    if (finalTask.status === "rewarded") {
+      try {
+        const rewardData = await this.api.getTaskRewardData(taskId);
+        if (rewardData) {
+          finalTask.pft = rewardData.pft || finalTask.pft;
+          finalTask.rewardTier = rewardData.rewardTier || finalTask.rewardTier;
+          finalTask.rewardScore = rewardData.rewardScore || finalTask.rewardScore;
+          finalTask.rewardSummary = rewardData.rewardSummary || finalTask.rewardSummary;
+          finalTask.txHash = rewardData.txHash || finalTask.txHash;
+        }
+      } catch (err) {
+        this.log(`Warning: Could not fetch reward data from summary: ${String(err)}`);
+      }
+    }
+
     this.log(`Task completed: ${finalTask.status}`);
     if (finalTask.status === "rewarded") {
       this.log(`Reward: ${finalTask.pft} PFT (${finalTask.rewardTier})`);
+      if (finalTask.rewardSummary) {
+        this.log(`Summary: ${finalTask.rewardSummary}`);
+      }
     }
 
     return finalTask;

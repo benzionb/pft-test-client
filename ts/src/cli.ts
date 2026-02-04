@@ -640,8 +640,19 @@ program
           if (status === "rewarded") {
             const pftOffer = taskData?.pft_offer_estimate || taskData?.pft_offer;
             const pftActual = taskData?.pft_offer_actual || taskData?.pft_offer;
-            const rewardSummary = taskData?.reward_summary;
             const title = taskData?.title;
+            
+            // Fetch reward data from summary endpoint (individual task endpoint doesn't populate reward fields)
+            let rewardData: { rewardSummary: string | null; rewardTier: string | null; rewardScore: string | null; txHash: string | null } | null = null;
+            try {
+              rewardData = await api.getTaskRewardData(taskId);
+            } catch {
+              // Fall back to task data if summary fetch fails
+            }
+            
+            const rewardSummary = rewardData?.rewardSummary ?? taskData?.reward_summary;
+            const rewardTier = rewardData?.rewardTier ?? taskData?.reward_tier_final;
+            const rewardScore = rewardData?.rewardScore ?? taskData?.reward_score;
             
             log(`\n${"=".repeat(50)}\n`);
             log(`  *** TASK REWARDED ***\n`);
@@ -652,6 +663,14 @@ program
               log(` (upgraded from ${pftOffer})`);
             }
             log(`\n`);
+            
+            if (rewardTier || rewardScore) {
+              log(`  Tier: ${rewardTier ?? "N/A"}`);
+              if (rewardScore) {
+                log(` (Score: ${rewardScore})`);
+              }
+              log(`\n`);
+            }
             
             if (rewardSummary) {
               log(`\n  Reward Summary:\n`);
@@ -665,7 +684,8 @@ program
               if (verifyPayload) {
                 const assessment = verifyPayload.assessment;
                 const valueToUser = verifyPayload.value_to_user;
-                if (assessment) {
+                if (assessment && !rewardTier) {
+                  // Only show assessment if we don't already have tier
                   log(`\n  Assessment: ${assessment}\n`);
                 }
                 if (valueToUser) {
