@@ -12,7 +12,7 @@ class SigningError(RuntimeError):
 class TransactionSigner:
     """Sign and submit XRP transactions using xrpl-py."""
 
-    def __init__(self, wallet_seed: str, node_url: str = "wss://ws.testnet.postfiat.org"):
+    def __init__(self, wallet_seed: str, node_url: str = "https://rpc.testnet.postfiat.org"):
         try:
             from xrpl.clients import JsonRpcClient
             from xrpl.wallet import Wallet

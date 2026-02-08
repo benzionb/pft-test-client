@@ -18,7 +18,7 @@ This package provides core building blocks for:
 - No official SDK compatibility guarantees (reverse engineered).
 
 ## Defaults (explicit)
-- XRPL RPC: wss://ws.testnet.postfiat.org
+- XRPL RPC: https://rpc.testnet.postfiat.org
 - Destination: rwdm72S9YVKkZjeADKU2bbUMuY4vPnSfH7
 - Amount: 1 drop
 - IPFS endpoint: http://127.0.0.1:5001
