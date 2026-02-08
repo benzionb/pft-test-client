@@ -462,7 +462,7 @@ program
   .option("--kind <kind>", "Pointer kind", "TASK_SUBMISSION")
   .option("--schema <schema>", "Pointer schema", "1")
   .option("--flags <flags>", "Pointer flags", "1")
-  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
+  .option("--node-url <url>", "XRPL node URL", "wss://ws.testnet.postfiat.org")
   .action(async (opts) => {
     const api = getApi();
     const signer = createSigner(opts.nodeUrl);
@@ -544,7 +544,7 @@ program
   .option("--kind <kind>", "Pointer kind", "TASK_SUBMISSION")
   .option("--schema <schema>", "Pointer schema", "1")
   .option("--flags <flags>", "Pointer flags", "1")
-  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
+  .option("--node-url <url>", "XRPL node URL", "wss://ws.testnet.postfiat.org")
   .action(async (opts) => {
     const api = getApi();
     const signer = createSigner(opts.nodeUrl);
@@ -743,7 +743,7 @@ program
   .description("Resume a pending submission (complete the on-chain transaction)")
   .requiredOption("--task-id <taskId>", "Task ID")
   .requiredOption("--type <type>", "evidence|verification_response")
-  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
+  .option("--node-url <url>", "XRPL node URL", "wss://ws.testnet.postfiat.org")
   .action(async (opts) => {
     const submissionType = opts.type as "evidence" | "verification_response";
     if (submissionType !== "evidence" && submissionType !== "verification_response") {
@@ -866,7 +866,7 @@ program
   .command("loop:test")
   .description("Run an automated E2E test task loop with minimal reward")
   .option("--type <type>", "Task type: personal|network", "personal")
-  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
+  .option("--node-url <url>", "XRPL node URL", "wss://ws.testnet.postfiat.org")
   .action(async (opts) => {
     const { TaskLoopRunner } = await import("./loop.js");
     const api = getApi();
@@ -947,7 +947,7 @@ program
   .requiredOption("--context <ctx>", "Context for the task")
   .requiredOption("--evidence <text>", "Evidence text to submit")
   .requiredOption("--verification-response <text>", "Response to verification question")
-  .option("--node-url <url>", "XRPL node URL", "wss://rpc.testnet.postfiat.org:6008")
+  .option("--node-url <url>", "XRPL node URL", "wss://ws.testnet.postfiat.org")
   .action(async (opts) => {
     const { TaskLoopRunner } = await import("./loop.js");
     const api = getApi();

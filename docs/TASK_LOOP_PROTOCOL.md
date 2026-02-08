@@ -387,5 +387,5 @@ console.log(result.status); // "rewarded" or "refused"
 ## References
 
 - Task Node: https://tasknode.postfiat.org
-- XRPL Testnet: wss://rpc.testnet.postfiat.org:6008
+- XRPL Testnet: wss://ws.testnet.postfiat.org
 - GitHub: https://github.com/benzionb/pft-test-client
