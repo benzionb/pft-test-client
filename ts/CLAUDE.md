@@ -504,6 +504,6 @@ console.log(result.pft);    // "1000" (PFT reward)
 ## References
 
 - **Task Node**: https://tasknode.postfiat.org
-- **XRPL Testnet**: wss://rpc.testnet.postfiat.org:6008
+- **XRPL Testnet**: wss://ws.testnet.postfiat.org
 - **Protocol Spec**: `docs/TASK_LOOP_PROTOCOL.md`
 - **README**: `ts/README.md`

@@ -54,7 +54,7 @@ describe("E2E Task Loop", () => {
     api = new TaskNodeApi(env.jwt, resolveBaseUrl(), resolveTimeoutMs());
 
     if (env.hasSigner) {
-      const nodeUrl = process.env.PFT_XRPL_NODE || "wss://rpc.testnet.postfiat.org:6008";
+      const nodeUrl = process.env.PFT_XRPL_NODE || "wss://ws.testnet.postfiat.org";
       signer = new TransactionSigner({
         seed: process.env.PFT_WALLET_SEED,
         mnemonic: process.env.PFT_WALLET_MNEMONIC,

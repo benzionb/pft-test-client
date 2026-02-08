@@ -13,7 +13,7 @@ export class TransactionSigner {
   wallet: Wallet;
 
   constructor(options: SignerOptions) {
-    const nodeUrl = options.nodeUrl ?? "wss://rpc.testnet.postfiat.org:6008";
+    const nodeUrl = options.nodeUrl ?? "wss://ws.testnet.postfiat.org";
     this.client = new Client(nodeUrl);
 
     if (options.mnemonic) {

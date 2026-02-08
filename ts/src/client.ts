@@ -7,7 +7,7 @@ export class PFTClientError extends Error {}
 export class PFTClient {
   signer: TransactionSigner;
 
-  constructor(walletSeed: string, nodeUrl = "wss://rpc.testnet.postfiat.org:6008") {
+  constructor(walletSeed: string, nodeUrl = "wss://ws.testnet.postfiat.org") {
     this.signer = new TransactionSigner({ seed: walletSeed, nodeUrl });
   }
 

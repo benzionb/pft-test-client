@@ -20,7 +20,7 @@ class PFTClient:
     def __init__(
         self,
         wallet_seed: str,
-        node_url: str = "https://rpc.testnet.postfiat.org:6008",
+        node_url: str = "wss://ws.testnet.postfiat.org",
         ipfs_endpoint: str = "http://127.0.0.1:5001",
     ):
         self.signer = TransactionSigner(wallet_seed, node_url=node_url)
