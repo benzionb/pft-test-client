@@ -147,13 +147,27 @@ export class TaskLoopRunner {
       x25519Pubkey: pubkey,
     });
 
-    const uploadData = upload as { cid?: string; evidence_id?: string; evidenceId?: string };
+    const uploadData = upload as {
+      cid?: string;
+      evidence_id?: string;
+      evidenceId?: string;
+      effective_verification_type?: string;
+      evidence_transport?: string;
+      gist_url?: string;
+    };
     const evidenceId = uploadData.evidence_id || uploadData.evidenceId;
     const cid = uploadData.cid;
+    const artifactType = uploadData.effective_verification_type || evidence.type;
     if (!cid || !evidenceId) {
       throw new Error("Evidence upload missing cid or evidence_id.");
     }
     this.log(`Evidence uploaded. CID: ${cid.slice(0, 20)}...`);
+    if (artifactType !== evidence.type) {
+      this.log(`Evidence stored as '${artifactType}' via ${uploadData.evidence_transport || "fallback"}.`);
+      if (uploadData.gist_url) {
+        this.log(`Secret gist: ${uploadData.gist_url}`);
+      }
+    }
 
     // Save pending BEFORE signing
     savePending({
@@ -161,7 +175,7 @@ export class TaskLoopRunner {
       type: "evidence",
       cid,
       evidence_id: evidenceId,
-      artifact_type: evidence.type,
+      artifact_type: artifactType,
       created_at: new Date().toISOString(),
     });
 
@@ -179,7 +193,7 @@ export class TaskLoopRunner {
     await this.api.submitEvidence(taskId, {
       cid,
       tx_hash: txHash,
-      artifact_type: evidence.type,
+      artifact_type: artifactType,
       evidence_id: evidenceId,
     });
 

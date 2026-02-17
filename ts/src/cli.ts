@@ -459,6 +459,8 @@ program
   .option("--content <content>", "Artifact content (text/url/code)")
   .option("--artifact-json <json>", "JSON string for artifact field")
   .option("--file <path>", "File path for artifact upload")
+  .option("--disable-secret-gist", "Disable secret gist preference for file evidence")
+  .option("--gist-description <text>", "Description to use when creating a secret gist from --file")
   .option("--kind <kind>", "Pointer kind", "TASK_SUBMISSION")
   .option("--schema <schema>", "Pointer schema", "1")
   .option("--flags <flags>", "Pointer flags", "1")
@@ -488,14 +490,30 @@ program
       artifact: opts.content || "",
       artifactJson: opts.artifactJson,
       filePath: opts.file,
+      preferSecretGist: !opts.disableSecretGist,
+      gistDescription: opts.gistDescription,
       x25519Pubkey: pubkey,
     });
 
-    const uploadData = upload as { cid?: string; evidence_id?: string; evidenceId?: string };
+    const uploadData = upload as {
+      cid?: string;
+      evidence_id?: string;
+      evidenceId?: string;
+      effective_verification_type?: string;
+      evidence_transport?: string;
+      gist_url?: string;
+    };
     const evidenceId = uploadData.evidence_id || uploadData.evidenceId;
     const cid = uploadData.cid;
+    const artifactType = uploadData.effective_verification_type || opts.type;
     if (!cid || !evidenceId) {
       throw new Error("Evidence upload missing cid or evidence_id.");
+    }
+    if (artifactType !== opts.type) {
+      log(`Evidence stored as '${artifactType}' via ${uploadData.evidence_transport || "fallback"}.\n`);
+      if (uploadData.gist_url) {
+        log(`Secret gist: ${uploadData.gist_url}\n`);
+      }
     }
 
     const pointer = await api.preparePointer({
@@ -515,7 +533,7 @@ program
       type: "evidence",
       cid,
       evidence_id: evidenceId,
-      artifact_type: opts.type,
+      artifact_type: artifactType,
       created_at: new Date().toISOString(),
     });
 
@@ -524,7 +542,7 @@ program
     const submit = await api.submitEvidence(opts.taskId, {
       cid,
       tx_hash: txHash,
-      artifact_type: opts.type,
+      artifact_type: artifactType,
       evidence_id: evidenceId,
     });
 

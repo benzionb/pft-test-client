@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { requireNonEmpty } from "./utils.js";
+import { createSecretGistFromFile, isSecretGistPreferred } from "./gist.js";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -40,7 +41,20 @@ export type EvidenceUploadOptions = {
   artifact: string;
   artifactJson?: string;
   filePath?: string;
+  preferSecretGist?: boolean;
+  gistDescription?: string;
   x25519Pubkey?: string;
+};
+
+export type EvidenceUploadResult = {
+  cid?: string;
+  evidence_id?: string;
+  evidenceId?: string;
+  effective_verification_type?: string;
+  evidence_transport?: string;
+  gist_url?: string;
+  source_file_name?: string;
+  [key: string]: unknown;
 };
 
 export type VerificationResponseResult = {
@@ -313,9 +327,31 @@ export class TaskNodeApi {
     return { userMessage: sendResult, assistantMessage: null };
   }
 
-  async uploadEvidence(taskId: string, options: EvidenceUploadOptions) {
+  async uploadEvidence(taskId: string, options: EvidenceUploadOptions): Promise<EvidenceUploadResult> {
+    const preferSecretGist = options.preferSecretGist ?? isSecretGistPreferred();
+    const requestedType = requireNonEmpty(options.verificationType, "verification_type");
+
+    // Bias toward secret gist URLs for file evidence by default.
+    if (requestedType === "file" && options.filePath && preferSecretGist) {
+      const filePath = requireNonEmpty(options.filePath, "filePath");
+      const gistUrl = createSecretGistFromFile(filePath, options.gistDescription);
+      const gistUpload: EvidenceUploadResult = await this.uploadEvidence(taskId, {
+        verificationType: "url",
+        artifact: gistUrl,
+        x25519Pubkey: options.x25519Pubkey,
+        preferSecretGist: false,
+      });
+      return {
+        ...(gistUpload as Record<string, unknown>),
+        effective_verification_type: "url",
+        evidence_transport: "secret_gist",
+        gist_url: gistUrl,
+        source_file_name: path.basename(filePath),
+      };
+    }
+
     const form = new FormData();
-    const verificationType = requireNonEmpty(options.verificationType, "verification_type");
+    const verificationType = requestedType;
     form.set("verification_type", verificationType);
     if (options.x25519Pubkey) {
       form.set("x25519_pubkey", options.x25519Pubkey);
@@ -351,7 +387,34 @@ export class TaskNodeApi {
       form.set("artifact", artifactJson);
     }
 
-    return this.requestForm(`/api/tasks/${taskId}/evidence`, form);
+    try {
+      const upload: EvidenceUploadResult = await this.requestForm(`/api/tasks/${taskId}/evidence`, form);
+      return {
+        ...upload,
+        effective_verification_type: verificationType,
+        evidence_transport: options.filePath ? "file_upload" : "inline",
+      };
+    } catch (err) {
+      // Optional fallback for explicit file uploads if server-side file upload fails.
+      if (verificationType === "file" && options.filePath && preferSecretGist) {
+        const filePath = requireNonEmpty(options.filePath, "filePath");
+        const gistUrl = createSecretGistFromFile(filePath, options.gistDescription);
+        const gistUpload: EvidenceUploadResult = await this.uploadEvidence(taskId, {
+          verificationType: "url",
+          artifact: gistUrl,
+          x25519Pubkey: options.x25519Pubkey,
+          preferSecretGist: false,
+        });
+        return {
+          ...(gistUpload as Record<string, unknown>),
+          effective_verification_type: "url",
+          evidence_transport: "secret_gist_fallback",
+          gist_url: gistUrl,
+          source_file_name: path.basename(filePath),
+        };
+      }
+      throw err;
+    }
   }
 
   async submitEvidence(taskId: string, payload: { cid: string; tx_hash: string; artifact_type: string; evidence_id: string }) {
