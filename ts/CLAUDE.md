@@ -476,6 +476,16 @@ npx pft-cli pending:clear --task-id <taskId> --type evidence
 | `standard` | 50-69 | 1x |
 | `minimal` | <50 | <1x |
 
+### Alpha Task Strategy
+
+Alpha tasks are scored on **novelty, not thoroughness**. The verifier computes a "sybil similarity" score comparing submissions against publicly available information. High similarity = "consensus narrative" = capped reward.
+
+**Key rules:**
+- Lead with proprietary insights (conversations, direct observation, non-public access) — not web research
+- Don't over-cite public sources — the verifier penalizes submissions that look like search result compilations
+- A short, sharp non-obvious insight scores higher than a comprehensive publicly-derivable analysis
+- Sybil similarity of 0.85+ will cap rewards significantly below the initial offer
+
 ---
 
 ## SDK/Programmatic Usage

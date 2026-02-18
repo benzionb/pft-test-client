@@ -455,6 +455,23 @@ Tasks are evaluated and rewards can be upgraded or downgraded from the initial o
 | `standard` | ~0.8-1.0x | Acceptable but unremarkable |
 | `minimal` | ~0.1x | Barely met requirements |
 
+### Alpha Task Scoring — Sybil Similarity & Novelty
+
+Alpha tasks are scored on **novelty**, not thoroughness. The verifier computes a "sybil similarity" score that measures how closely the submission resembles publicly available information. High sybil similarity = consensus narrative = lower reward.
+
+**Observed example (Feb 2026):**
+- Task: "Analyze Divergent GPU Lifecycle Strategies: Cloud vs Frontier Labs"
+- Initial offer: 3,200 PFT
+- Actual reward: 1,050 PFT (score: 52, tier: average)
+- Verifier feedback: "Sybil similarity is high (0.85), indicating this is a consensus narrative. Novelty score is capped accordingly."
+- Root cause: Evidence was backed entirely by public web sources (eBay listings, news articles, analyst reports). The proprietary insight (from an NVIDIA director) was diluted by confirmatory public data.
+
+**Lessons for maximizing alpha task rewards:**
+1. **Lead with proprietary framing** — emphasize what you know from non-public sources (conversations, insider access, direct observation) rather than what Google can confirm
+2. **Don't over-cite public sources** — the verifier penalizes submissions that look like web research compilations. Public data points should support, not constitute, the analysis
+3. **Novelty > thoroughness** — a short, sharp insight the verifier can't find via search scores higher than a comprehensive but publicly-derivable analysis
+4. **The sybil similarity check is automated** — likely compares submission text against web search results. Unique framing and original synthesis reduce similarity score
+
 ### Daily Rewards Endpoint
 
 `GET /api/tasks/rewards/daily?days=28` provides per-day breakdown:
